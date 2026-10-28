@@ -234,3 +234,109 @@ fn test_engine_hardening_hash_deduplication() {
     assert!(names.contains(&"marker1.tmp"));
     assert!(names.contains(&"marker2.tmp"));
 }
+
+#[test]
+fn test_greedy_score_sorted_matching_anchor_preservation_parity() {
+    let dummy_pointer = EvidencePointer {
+        report_id: "rep".to_string(),
+        json_pointer: "/dummy".to_string(),
+        event_summary: "dummy".to_string(),
+        is_available: true,
+        missing_reason: None,
+        raw_snippet: serde_json::json!({}),
+    };
+
+    let p_a1 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 101,
+        source_ppid: Some(1),
+        image_name: "powershell.exe".to_string(),
+        command_line: "powershell.exe -enc AAA -NoProfile".to_string(),
+        lineage_path: vec!["explorer.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_pointer.clone(),
+    };
+    let p_a2 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 102,
+        source_ppid: Some(1),
+        image_name: "powershell.exe".to_string(),
+        command_line: "powershell.exe -enc AAA -WindowStyle Hidden".to_string(),
+        lineage_path: vec!["explorer.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_pointer.clone(),
+    };
+
+    let p_b1 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 201,
+        source_ppid: Some(1),
+        image_name: "powershell.exe".to_string(),
+        command_line: "powershell.exe -enc AAA -NoProfile".to_string(),
+        lineage_path: vec!["explorer.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_pointer.clone(),
+    };
+    let p_b2 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 202,
+        source_ppid: Some(1),
+        image_name: "powershell.exe".to_string(),
+        command_line: "powershell.exe -NoProfile".to_string(),
+        lineage_path: vec!["explorer.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_pointer.clone(),
+    };
+
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "CAPE".to_string(),
+        schema_provenance_type: "DOCUMENTED_VENDOR_FORMAT".to_string(),
+        sample_sha256: "aaa".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_a1, p_a2],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "CAPE".to_string(),
+        schema_provenance_type: "DOCUMENTED_VENDOR_FORMAT".to_string(),
+        sample_sha256: "aaa".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_b1, p_b2],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let comparator = EvidenceComparator::new(&norm_a, &norm_b);
+    let comparison = comparator.reconcile();
+
+    // Find match for A1 (PID 101)
+    let match_a1 = comparison
+        .reconciled_processes
+        .iter()
+        .find(|p| p.pids_by_report.get("rep_a") == Some(&101))
+        .expect("A1 present");
+    let match_a2 = comparison
+        .reconciled_processes
+        .iter()
+        .find(|p| p.pids_by_report.get("rep_a") == Some(&102))
+        .expect("A2 present");
+
+    // A1 is matched to B1 (201) and NOT displaced to B2 (202)
+    assert_eq!(match_a1.pids_by_report.get("rep_b"), Some(&201));
+    assert_eq!(match_a1.confidence, ProcessMatchConfidence::MATCHED);
+
+    // A2 is UNRESOLVED because B1 was greedily consumed by anchor A1
+    assert_eq!(match_a2.pids_by_report.get("rep_b"), None);
+    assert_eq!(match_a2.confidence, ProcessMatchConfidence::UNRESOLVED);
+}

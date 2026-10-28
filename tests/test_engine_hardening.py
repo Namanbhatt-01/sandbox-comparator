@@ -155,6 +155,63 @@ class TestEngineHardening(unittest.TestCase):
         self.assertEqual(len(norm.limitations), 1)
         self.assertEqual(norm.limitations[0].target_pattern, "port:8443")
 
+    def test_greedy_score_sorted_matching_anchor_preservation(self):
+        """
+        Demonstrates the concrete trade-off between greedy score-sorted matching
+        and global maximum-weight assignment.
+
+        Given candidate similarity matrix:
+                    B1 (PID 201)     B2 (PID 202)
+        A1 (PID 101)    1.00            0.77
+        A2 (PID 102)    0.79            0.25 (< 0.45 threshold)
+
+        - Greedy score-sorted matching locks the highest-scoring anchor pair (A1-B1, score 1.00),
+          leaving A2 unmatched (0.0 score) because B1 is consumed and A2-B2 (0.25) is below threshold.
+          Aggregate weight = 1.00.
+        - A global sum solver (e.g. Munkres) would pair A1-B2 (0.77) and A2-B1 (0.79) to maximize
+          aggregate weight (total 1.56 > 1.00), at the cost of displacing the perfect anchor (A1-B1).
+
+        This test asserts the engine's deterministic greedy anchor-preservation behavior.
+        """
+        p_a1 = ProcessObservation("rep_a", 101, 1, "powershell.exe", "powershell.exe -enc AAA -NoProfile", ["explorer.exe"], 2, EvidencePointer("rep_a", "/p/0", "p1", {}))
+        p_a2 = ProcessObservation("rep_a", 102, 1, "powershell.exe", "powershell.exe -enc AAA -WindowStyle Hidden", ["explorer.exe"], 2, EvidencePointer("rep_a", "/p/1", "p2", {}))
+
+        p_b1 = ProcessObservation("rep_b", 201, 1, "powershell.exe", "powershell.exe -enc AAA -NoProfile", ["explorer.exe"], 2, EvidencePointer("rep_b", "/p/0", "p1", {}))
+        p_b2 = ProcessObservation("rep_b", 202, 1, "powershell.exe", "powershell.exe -NoProfile", ["explorer.exe"], 2, EvidencePointer("rep_b", "/p/1", "p2", {}))
+
+        norm_a = NormalizedReport("rep_a", "CAPE", "CAPE", "DOCUMENTED_VENDOR_FORMAT", "aaa", 60, processes=[p_a1, p_a2])
+        norm_b = NormalizedReport("rep_b", "CAPE", "CAPE", "DOCUMENTED_VENDOR_FORMAT", "aaa", 60, processes=[p_b1, p_b2])
+
+        comparator = EvidenceComparator(norm_a, norm_b)
+
+        # Assert individual candidate scores
+        s_a1_b1, _ = comparator._score_process_pair(p_a1, p_b1)
+        s_a1_b2, _ = comparator._score_process_pair(p_a1, p_b2)
+        s_a2_b1, _ = comparator._score_process_pair(p_a2, p_b1)
+        s_a2_b2, _ = comparator._score_process_pair(p_a2, p_b2)
+
+        self.assertEqual(s_a1_b1, 1.00)
+        self.assertGreaterEqual(s_a1_b2, 0.70)
+        self.assertGreaterEqual(s_a2_b1, 0.70)
+        self.assertLess(s_a2_b2, 0.45)  # Below matching threshold
+
+        res = comparator.reconcile()
+
+        # Find reconciled process for A1
+        match_a1 = next((p for p in res.reconciled_processes if p.pids_by_report.get("rep_a") == 101), None)
+        match_a2 = next((p for p in res.reconciled_processes if p.pids_by_report.get("rep_a") == 102), None)
+
+        self.assertIsNotNone(match_a1)
+        self.assertIsNotNone(match_a2)
+
+        # Verify A1 is matched to B1 (201) and NOT displaced to B2 (202)
+        self.assertEqual(match_a1.pids_by_report.get("rep_b"), 201)
+        self.assertEqual(match_a1.confidence.value, "MATCHED")
+
+        # Verify A2 is left UNRESOLVED because B1 was consumed by anchor A1
+        self.assertNotIn("rep_b", match_a2.pids_by_report)
+        self.assertEqual(match_a2.confidence.value, "UNRESOLVED")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,7 @@ Traditional approaches either merge telemetry uncritically (masking evasion and 
 
 The Sandbox Comparator solves this via **three foundational pillars**:
 - **Epistemic Disentanglement**: Strict separation between *observation presence* (whether an event was recorded) and *causal explanation* (why it occurred or was omitted).
-- **Global Optimal Bipartite Matching**: Linear sum assignment (Munkres algorithm) over calibrated multi-dimensional feature similarity matrices to reconcile process lineages across randomized PIDs.
+- **Greedy Score-Sorted Bipartite Matching with Anchor Preservation**: High-performance candidate matching ($\tau \ge 0.45$) over calibrated multi-dimensional feature similarity matrices to reconcile process lineages across randomized PIDs while preventing displacement anomalies.
 - **Strict RFC 6901 Evidence Provenance**: Every reconciled node links back to its exact JSON pointer (`/behavior/processes/0`, `/execution/created_files/1`) in the raw vendor export for unassailable forensic auditability.
 
 ---
@@ -42,7 +42,7 @@ The Sandbox Comparator solves this via **three foundational pillars**:
 |  Process Reconciliation |                              | File Reconciliation  |
 |  - Jaccard Token Sim |                              | - SHA-256 Exact Hash |
 |  - Lineage Path Tree |                              | - Malformed Detection|
-|  - Global Assignment |                              | - Causal Attribution |
+|  - Anchor Preservation|                              | - Causal Attribution |
 +----------+-----------+                              +----------+-----------+
            |                                                     |
            +--------------------------+--------------------------+
@@ -76,7 +76,7 @@ The Sandbox Comparator is engineered with a **dual-engine architecture** ensurin
 
 ### 3.1 Python Reference Engine (`engine/`)
 - **FastAPI Backend (`web/app.py`)**: Asynchronous, local-loopback-only web service (`127.0.0.1:8000`) serving the Corelight Investigator-style analytical dashboard.
-- **Scipy & NumPy Optimization**: High-performance linear sum assignment (`scipy.optimize.linear_sum_assignment`) solving global bipartite graph matching in milliseconds.
+- **Zero-Dependency Lightweight Matching**: Pure-Python candidate score sorting with pruning threshold ($\tau \ge 0.45$), avoiding heavyweight scientific runtime dependencies.
 - **Pydantic Validation**: Canonical schemas enforcing type guarantees across varied JSON inputs.
 
 ### 3.2 Standalone Rust Core (`rust/`)
@@ -103,6 +103,18 @@ Matches are partitioned into:
 - **`MATCHED`** ($\ge 0.70$): High-confidence corroborated process execution.
 - **`POSSIBLE_MATCH`** ($0.45 \le \text{Score} < 0.70$): Ambiguous candidate requiring analyst inspection.
 - **`UNRESOLVED`** ($< 0.45$): Single-report execution or uncorroborated anomaly.
+
+### 4.1 Greedy Anchor Preservation vs. Global Sum Maximization
+
+The reconciliation engine deliberately implements a **greedy score-sorted matching strategy** rather than global maximum-weight assignment (e.g. Munkres / Hungarian algorithm).
+
+#### Forensic Design Rationale
+In malware execution trace reconciliation, primary processes (e.g., initial payload droppers) typically achieve near-perfect similarity ($S \ge 0.90$) across sandbox runs.
+- Under a **global sum maximizer**, if pairing an anchor process $A_1$ with an inferior candidate $B_2$ ($S=0.77$) allows a secondary process $A_2$ to match $B_1$ ($S=0.79$), the solver will reassign $A_1$ to $B_2$ to maximize the total aggregate weight ($0.77 + 0.79 = 1.56 > 1.00$).
+- In malware incident response, this creates a critical **displacement anomaly**: the analyst's highest-certainty root execution match is degraded and broken to satisfy an ambiguous child process.
+- **Greedy anchor preservation** guarantees that high-confidence pairs are permanently locked first, ensuring root causality remains intact.
+
+This property is formally asserted by regression tests in Python (`tests/test_engine_hardening.py`) and Rust (`rust/tests/test_parity.rs`).
 
 ---
 

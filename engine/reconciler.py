@@ -316,7 +316,7 @@ class EvidenceComparator:
         for idx_a in candidates_by_a:
             candidates_by_a[idx_a].sort(key=lambda x: x[1], reverse=True)
 
-        # Step 2: Global maximum weight bipartite matching (highest scores matched first)
+        # Step 2: Greedy score-sorted bipartite matching with anchor preservation (highest scores matched first)
         all_candidate_pairs.sort(key=lambda x: x[0], reverse=True)
         matched_a_to_b: Dict[int, Tuple[int, float, str]] = {}
         matched_b_indices: Set[int] = set()

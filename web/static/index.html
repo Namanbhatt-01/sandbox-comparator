@@ -758,7 +758,7 @@
       </div>
       <div class="target-item">
         <span class="target-label">Reconciliation Engine</span>
-        <span class="target-data" style="color: var(--emerald);">Bipartite Global Assignment (Munkres / scipy)</span>
+        <span class="target-data" style="color: var(--emerald);">Greedy Bipartite Matching (Anchor Preservation, Score-Sorted)</span>
       </div>
     </div>
 
@@ -801,7 +801,7 @@
     <div class="analysis-card" id="analysis-card">
       <div class="analysis-header">
         <div style="display:flex; align-items:center; gap: 10px;">
-          <span style="font-size: 11.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;">EXECUTIVE FORENSIC VERDICT:</span>
+          <span style="font-size: 11.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;">EXECUTIVE ALIGNMENT VERDICT:</span>
           <span id="analysis-verdict-pill" class="verdict-tag verdict-compromise">ANALYZING...</span>
         </div>
         <div style="font-size: 11.5px; color: var(--text-dim);">Evidence-Aware Epistemic Grounding</div>
@@ -1060,7 +1060,7 @@
         const v = data.analysis_summary.verdict || 'ANALYZED';
         verdictPill.textContent = v;
         verdictPill.className = 'verdict-tag ' + (
-          v.includes('COMPROMISE') ? 'verdict-compromise' :
+          (v.includes('CORROBORATED') || v.includes('COMPROMISE')) && !v.includes('LOW') ? 'verdict-compromise' :
           (v.includes('PARTIAL') ? 'verdict-partial' : 'verdict-divergent')
         );
       }

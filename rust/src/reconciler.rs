@@ -448,7 +448,7 @@ impl<'a> EvidenceComparator<'a> {
             list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         }
 
-        // Step 2: Global maximum-weight bipartite matching
+        // Step 2: Greedy score-sorted bipartite matching with anchor preservation (highest scores matched first)
         all_candidate_pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut matched_a_to_b: BTreeMap<usize, (usize, f64, String)> = BTreeMap::new();

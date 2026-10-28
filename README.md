@@ -133,7 +133,7 @@ for p in comparison.reconciled_processes:
 |  [ Modern Dark Web UI ] <======== HTTP / JSON ========> [ Local Python Engine ]         |
 |  - Drag-and-Drop Local Files                             - Dynamic Schema Sniffer       |
 |  - Interactive Evidence Drawer                           - RFC 6901 Provenance Resolver |
-|  - Real-time Markdown Export                             - Global Bipartite Matcher     |
+|  - Real-time Markdown Export                             - Anchor-Preserving Matcher    |
 |                                                          - Epistemic Causality Engine   |
 +-----------------------------------------------------------------------------------------+
                                       |
@@ -152,8 +152,9 @@ When analyzing proprietary threat intelligence or incident response artifacts, t
 
 ## 5. Reconciliation Engine Principles
 
-### 1. Process Alignment via Global Bipartite Matching
-Rather than greedy top-down traversal, the reconciler evaluates all candidate process pairs across reports and resolves the global maximum similarity assignment.
+### 1. Process Alignment via Anchor-Preserving Bipartite Matching
+Rather than unconstrained tree traversal, the reconciler evaluates candidate process pairs above threshold ($\tau \ge 0.45$) and applies score-sorted anchor preservation.
+- **Anchor Preservation**: Highest-confidence process matches (e.g. initial droppers with identical image names and CLI arguments) are locked first. This prevents global solver "displacement anomalies" where a primary anchor match is broken merely to pair marginal child processes.
 - **Similarity Factors**: Image name exactness, command-line token Jaccard similarity, tree depth delta, and parent lineage overlap.
 - **Ambiguity Detection**: If multiple candidate nodes score within $\Delta < 0.15$ of each other, the node is flagged as `POSSIBLE_MATCH (AMBIGUOUS)` and all alternative candidate PIDs are recorded in the evidence ledger.
 

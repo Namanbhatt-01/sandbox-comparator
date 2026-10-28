@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from engine.parsers import parse_auto_report
 from engine.reconciler import EvidenceComparator
-from cli import format_markdown_report
+from cli import classify_cross_report_activity, format_markdown_report
 
 logger = logging.getLogger("sandbox_comparator")
 
@@ -110,22 +110,8 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     unresolved_net = sum(1 for n in net_out if n["observation_presence"] != "OBSERVED_IN_BOTH")
     total_lims_count = sum(len(v) for v in limitations_out.values())
 
-    # Corelight-Style Epistemic Analysis Summary
-    if matched_procs > 0 and matched_files > 0:
-        verdict = "CORROBORATED COMPROMISE"
-        summary_text = (
-            f"Based on reconciled telemetry across both sandbox runs, there is high-confidence corroboration of "
-            f"core process execution and dropped file staging ({matched_procs} process node(s), {matched_files} dropped binary artifact(s))."
-        )
-    elif matched_procs > 0 or matched_files > 0:
-        verdict = "PARTIAL CORROBORATION"
-        summary_text = (
-            f"Partial behavioral alignment observed across reports. "
-            f"{matched_procs} process node(s) and {matched_files} file artifact(s) were observed in both runs."
-        )
-    else:
-        verdict = "DIVERGENT EXECUTION"
-        summary_text = "Divergent execution traces observed across reports with low cross-sandbox corroboration."
+    # Epistemic Analysis Summary
+    verdict, summary_text = classify_cross_report_activity(matched_procs, matched_files)
 
     if unresolved_net > 0 and total_lims_count > 0:
         summary_text += (

@@ -7,9 +7,45 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Tuple
 from engine.parsers import parse_auto_report
 from engine.reconciler import EvidenceComparator
 from engine.vt_benchmark import VTBenchmarkEvaluator
+
+
+def classify_cross_report_activity(matched_procs: int, matched_files: int) -> Tuple[str, str]:
+    """
+    Classifies cross-sandbox report alignment into epistemic activity tiers.
+    Separates behavioral correlation from claims of malicious compromise.
+    """
+    if matched_procs > 0 and matched_files > 0:
+        return (
+            "CROSS-RUN ACTIVITY CORROBORATED",
+            (
+                f"Recorded process and dropped-file observations align across "
+                f"both reports ({matched_procs} process node(s), "
+                f"{matched_files} file artifact(s)). "
+                "Cross-run overlap alone does not establish maliciousness "
+                "or confirm compromise."
+            ),
+        )
+    if matched_procs > 0 or matched_files > 0:
+        return (
+            "PARTIAL CROSS-RUN CORROBORATION",
+            (
+                f"Partial behavioral alignment observed across reports: "
+                f"{matched_procs} process node(s) and "
+                f"{matched_files} file artifact(s) were recorded in both."
+            ),
+        )
+    return (
+        "LOW CROSS-RUN CORROBORATION",
+        (
+            "No process or dropped-file observations met the current "
+            "matching criteria. This does not establish that the behavior "
+            "did not occur."
+        ),
+    )
 
 
 def format_markdown_report(comparison, vt_eval=None) -> str:
@@ -27,21 +63,7 @@ def format_markdown_report(comparison, vt_eval=None) -> str:
     unresolved_net = sum(1 for n in comparison.reconciled_network if n.observation_presence.value != "OBSERVED_IN_BOTH")
     total_lims = sum(len(v) for v in comparison.collection_limitations.values())
 
-    if matched_procs > 0 and matched_files > 0:
-        verdict = "CORROBORATED COMPROMISE"
-        summary_text = (
-            f"High-confidence corroboration of core process execution and dropped file staging "
-            f"across both sandbox environments ({matched_procs} process node(s), {matched_files} dropped binary artifact(s))."
-        )
-    elif matched_procs > 0 or matched_files > 0:
-        verdict = "PARTIAL CORROBORATION"
-        summary_text = (
-            f"Partial behavioral alignment observed across reports. "
-            f"{matched_procs} process node(s) and {matched_files} file artifact(s) were observed in both runs."
-        )
-    else:
-        verdict = "DIVERGENT EXECUTION"
-        summary_text = "Divergent execution traces observed across reports with low cross-sandbox corroboration."
+    verdict, summary_text = classify_cross_report_activity(matched_procs, matched_files)
 
     if unresolved_net > 0 and total_lims > 0:
         summary_text += (
@@ -49,7 +71,7 @@ def format_markdown_report(comparison, vt_eval=None) -> str:
             f"or egress filtering policies, rather than non-occurrence."
         )
 
-    lines.append(f"## Executive Forensic Verdict: `{verdict}`")
+    lines.append(f"## Executive Alignment Verdict: `{verdict}`")
     lines.append(f"> **Analysis Summary**: {summary_text}\n")
 
     lines.append("## 1. Dropped Files Reconciliation (Disentangled Presence & Explanation)")
