@@ -27,33 +27,62 @@ Security analysts frequently submit malware to multiple sandboxes or execute rep
 
 ---
 
-## 2. Quickstart
+## 2. Installation & Quickstart
 
-### Prerequisites
-- Python 3.9+
-- FastAPI & Uvicorn (installed in your environment)
-
-### Launch Local Interactive Web App
-Launch the local web dashboard with a single command:
+### Installation
+Install locally via pip (requires Python 3.9+):
 ```bash
-python3 run_app.py
+git clone https://github.com/Namanbhatt-01/sandbox-comparator.git
+cd sandbox-comparator
+pip install -e .
 ```
-This automatically opens your browser at `http://127.0.0.1:8000`.
+Or using Make:
+```bash
+make install
+```
 
-Features of the local web workspace:
+### Launch Interactive Web Workspace
+Start the local dashboard (auto-opens your browser at `http://127.0.0.1:8000`):
+```bash
+sandbox-comparator ui
+# Or: python3 run_app.py
+# Or: make ui
+```
+
+**Key Workspace Features**:
 - **Preset Scenarios**: Instant one-click loading of *Scenario Y (Cross-Vendor CAPE v2.4 vs Falcon Cloud)* and *Scenario X (Repeated Run CAPE Run 1 vs Run 2)*.
-- **Custom Report Comparison**: Drag and drop any two sandbox JSON reports. The browser reads files locally and submits them to the local engine.
-- **Interactive Evidence Inspector**: Click any RFC 6901 pointer to open the raw JSON snippet drawer with epistemic boundaries highlighted.
-- **Exporting**: Download an executive Markdown reconciliation report (`.md`) or structured JSON delta.
+- **Zero-Cloud Drag-and-Drop**: Drag any two sandbox JSON reports directly into the browser. Raw files are parsed in-memory without uploading to any external server.
+- **Interactive RFC 6901 Inspector**: Click any pointer to slide open the raw JSON evidence snippet and inspect epistemic boundaries.
+- **One-Click Export**: Export an executive Markdown reconciliation diff (`.md`) or structured JSON delta.
 
 ### Command-Line Interface (CLI)
-You can also run comparisons directly from your terminal:
+Run automated comparisons directly in your terminal or CI/CD pipelines:
 ```bash
-# Compare two reports (supports markdown or json output)
-python3 cli.py --report-a data/report_format_a_cape.json --report-b data/report_format_b_falcon.json --format markdown
+# Compare two reports and output an executive Markdown diff
+sandbox-comparator compare --report-a data/report_format_a_cape.json --report-b data/report_format_b_falcon.json
 
-# Output structured JSON for automation pipelines
-python3 cli.py --report-a run1.json --report-b run2.json --format json
+# Output structured JSON for automation & SOAR pipelines
+sandbox-comparator compare --report-a run1.json --report-b run2.json --format json
+```
+
+### Python SDK Usage
+Integrate the evidence-aware reconciler directly into your DFIR scripts:
+```python
+import json
+from engine.parsers import parse_auto_report
+from engine.reconciler import EvidenceComparator
+
+with open("cape_run1.json") as f1, open("falcon_run2.json") as f2:
+    norm_a = parse_auto_report(json.load(f1), report_id="cape_run")
+    norm_b = parse_auto_report(json.load(f2), report_id="falcon_run")
+
+comparator = EvidenceComparator(norm_a, norm_b)
+comparison = comparator.reconcile()
+
+print(f"Sample SHA-256: {comparison.sample_sha256}")
+print(f"Reconciled processes: {len(comparison.reconciled_processes)}")
+for p in comparison.reconciled_processes:
+    print(f"  [{p.confidence.value}] {p.image_name} (Score: {p.heuristic_similarity_score:.2f})")
 ```
 
 ---
@@ -157,7 +186,19 @@ python3 -m unittest test_holdout_and_provenance.py
 
 ---
 
-## 9. License
+## 9. Product Editions & Commercial Roadmap
+
+Sandbox Comparator is built under an open-core, utility-first model:
+- **Community Edition (Free / MIT)**: 100% offline-first CLI and local web workspace; CAPE, Falcon, and Cuckoo ingestion; global bipartite matching; RFC 6901 evidence inspector; Markdown exports.
+- **Professional Edition (Planned / ₹999/mo)**: Any.Run & Joe Sandbox native parsers; persistent SQLite workspace history; automated YARA/Sigma rule generation; executive PDF reports.
+- **Team & Enterprise (Planned / ₹4,999/mo)**: Private self-hosted sync layer; SOAR webhooks (Splunk Phantom, Cortex XSOAR); centralized cryptographically signed audit logs.
+
+For complete product specifications, compliance alignment (GDPR / HIPAA / SOC 2), and architectural guarantees, see [**PRODUCT_SPEC.md**](PRODUCT_SPEC.md).
+
+---
+
+## 10. License
 
 Released under the [MIT License](LICENSE).
+
 

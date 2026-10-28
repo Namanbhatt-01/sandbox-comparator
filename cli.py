@@ -112,7 +112,20 @@ def format_markdown_report(comparison, vt_eval=None) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evidence-Aware Sandbox Report Comparator (Production MVP)")
+    # Seamless routing for subcommands: "sandbox-comparator ui" or "sandbox-comparator compare ..."
+    if len(sys.argv) > 1 and sys.argv[1] == "ui":
+        from run_app import main as run_ui
+        sys.argv.pop(1)
+        run_ui()
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "compare":
+        sys.argv.pop(1)
+
+    parser = argparse.ArgumentParser(
+        prog="sandbox-comparator",
+        description="Evidence-Aware Malware Sandbox Report Comparator (Offline-First Product CLI)"
+    )
     parser.add_argument("--report-a", default="data/report_format_a_cape.json", help="Path to Report A JSON")
     parser.add_argument("--report-b", default="data/report_format_b_falcon.json", help="Path to Report B JSON")
     parser.add_argument("--vt-ref", default=None, help="Optional path to VT summary JSON for benchmark comparison")
