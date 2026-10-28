@@ -136,15 +136,15 @@ def get_presets():
     return [
         {
             "id": "scenario_y",
-            "name": "Scenario Y: Cross-Vendor (CAPE v2.4 vs Falcon v7.x)",
-            "description": "Cross-sandbox behavioral reconciliation of invoice_oct2026.exe across different schemas.",
+            "name": "Scenario Y: Schema Divergence (CAPE v2.4 export vs Synthetic Falcon approximation)",
+            "description": "Cross-sandbox behavioral reconciliation of invoice_oct2026.exe across schemas (CAPE fixture vs synthetic Falcon-like approximation).",
             "file_a": "report_format_a_cape.json",
             "file_b": "report_format_b_falcon.json"
         },
         {
             "id": "scenario_x",
-            "name": "Scenario X: Repeated Run (CAPE Run 1 vs CAPE Run 2)",
-            "description": "Cross-run calibration comparing repeated executions in CAPE Sandbox to isolate environmental noise.",
+            "name": "Scenario X: Structural Variation (CAPE v2.4 fixture vs Sanitized CAPE v2.2 native fixture)",
+            "description": "Cross-version schema variation comparing a CAPE v2.4 fixture with a real sanitized CAPE v2.2 export.",
             "file_a": "report_format_a_cape.json",
             "file_b": "real_sanitized_cape_v2_export.json"
         }
@@ -162,13 +162,13 @@ def compare_reports(req: CompareRequest):
         if req.preset_id == "scenario_y":
             file_a = DATA_DIR / "report_format_a_cape.json"
             file_b = DATA_DIR / "report_format_b_falcon.json"
-            id_a = "cape_sandbox_v2.4"
-            id_b = "falcon_sandbox_cloud"
+            id_a = "cape_v2.4_fixture"
+            id_b = "synthetic_falcon_approx"
         elif req.preset_id == "scenario_x":
             file_a = DATA_DIR / "report_format_a_cape.json"
             file_b = DATA_DIR / "real_sanitized_cape_v2_export.json"
-            id_a = "cape_run_1"
-            id_b = "cape_run_2"
+            id_a = "cape_v2.4_fixture"
+            id_b = "sanitized_cape_v2.2_export"
         else:
             raise HTTPException(status_code=404, detail="Preset not found")
 

@@ -30,6 +30,10 @@ env/
 ENV/
 .venv/
 
+# Rust build artifacts
+target/
+rust/target/
+
 # IDE & OS
 .vscode/
 .idea/

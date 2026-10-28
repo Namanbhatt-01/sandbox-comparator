@@ -1,16 +1,62 @@
 # Evidence-Aware Sandbox Comparator
 
+[![CI](https://github.com/Namanbhatt-01/sandbox-comparator/actions/workflows/ci.yml/badge.svg)](https://github.com/Namanbhatt-01/sandbox-comparator/actions)
+[![Tests: 28 Passing](https://img.shields.io/badge/tests-28%20passing-brightgreen.svg)](tests/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Architecture: Offline--First](https://img.shields.io/badge/architecture-offline--first-emerald.svg)]()
-[![Privacy: Zero--Cloud--Telemetry](https://img.shields.io/badge/telemetry-zero--cloud--upload-blue.svg)]()
+[![Privacy: Zero--Cloud--Telemetry](https://img.shields.io/badge/telemetry-zero--outbound--telemetry-blue.svg)]()
 
 > **An offline-first behavioral comparison and evidence verification layer for malware sandbox reports.**  
 > Sit on top of your existing sandbox exports (CAPE, Falcon, Cuckoo) to reconcile divergent execution traces, correlate transient PIDs, isolate environment dropouts, and verify every analytical conclusion against RFC 6901 source pointers.
 
 ---
 
-## 1. Why Sandbox Comparator?
+## 1. Five-Minute First-Run Quickstart
+
+Follow this 5-minute route to install, launch, inspect a finding, and verify the test suite:
+
+### Step 1: Install Package Locally
+Clone and install into your local environment (requires Python 3.9+):
+```bash
+git clone https://github.com/Namanbhatt-01/sandbox-comparator.git
+cd sandbox-comparator
+pip install -e .
+```
+*(Or run `make install`)*
+
+### Step 2: Launch the Local Web Workspace
+Start the local dashboard (default bind is strictly `127.0.0.1:8000`):
+```bash
+sandbox-comparator ui
+# Or: make ui
+```
+Your browser will open automatically at `http://127.0.0.1:8000`.
+
+### Step 3: Inspect a Finding
+1. Click **"Scenario Y: Schema Divergence (CAPE v2.4 vs Synthetic Falcon-approx)"** on the top panel.
+2. Under the **Process Trees** tab, note how `invoice_oct2026.exe` is matched despite divergent PIDs (`PID 3420` vs `PID 4112`).
+3. Click the blue RFC 6901 pointer link (`🔍 /behavior/processes/0/process_name`) to slide open the raw JSON evidence drawer and inspect the epistemic boundary.
+
+### Step 4: Run CLI Comparison & Export
+Compare two reports directly in your terminal and generate an executive Markdown diff:
+```bash
+sandbox-comparator compare \
+  --report-a data/report_format_a_cape.json \
+  --report-b data/report_format_b_falcon.json \
+  --output diff.md
+```
+
+### Step 5: Verify Test Suite
+Run the 28 unit and regression tests locally:
+```bash
+make test
+# Or: python3 -m unittest discover -s . -p "test_*.py"
+```
+
+---
+
+## 2. Why Sandbox Comparator?
 
 Security analysts frequently submit malware to multiple sandboxes or execute repeated analysis runs to observe evasive behaviors. However, comparing two multi-megabyte JSON reports manually in browser tabs or running naive text diffs leads to acute cognitive fatigue and analytical errors:
 - **Identifier Drift**: Ephemeral Process IDs (PIDs) change across every run, causing text diffs to show 100% divergence even when identical commands executed.
@@ -23,46 +69,37 @@ Security analysts frequently submit malware to multiple sandboxes or execute rep
 2. **Order-Independent Bipartite Matching**: Aligns process trees using multi-factor similarity heuristics (image name, command-line arguments, ancestry depth) without relying on volatile PIDs.
 3. **Epistemic Disentanglement**: Separates what telemetry actually logged from what remains uncertain.
 4. **Source Evidence Provenance**: Every matched or missing entity links directly to an RFC 6901 JSON pointer resolving to the exact raw source line.
-5. **100% Offline-First Execution**: Runs entirely on your local machine. No malware telemetry, hashes, or client data are ever transmitted to an external cloud.
+5. **100% Offline-First Execution**: Runs entirely on your local machine with zero external network requests or font imports.
 
 ---
 
-## 2. Installation & Quickstart
+## 3. Workspace Features & CLI Usage
 
-### Installation
-Install locally via pip (requires Python 3.9+):
-```bash
-git clone https://github.com/Namanbhatt-01/sandbox-comparator.git
-cd sandbox-comparator
-pip install -e .
-```
-Or using Make:
-```bash
-make install
-```
-
-### Launch Interactive Web Workspace
-Start the local dashboard (auto-opens your browser at `http://127.0.0.1:8000`):
-```bash
-sandbox-comparator ui
-# Or: python3 run_app.py
-# Or: make ui
-```
-
-**Key Workspace Features**:
-- **Preset Scenarios**: Instant one-click loading of *Scenario Y (Cross-Vendor CAPE v2.4 vs Falcon Cloud)* and *Scenario X (Repeated Run CAPE Run 1 vs Run 2)*.
-- **Zero-Cloud Drag-and-Drop**: Drag any two sandbox JSON reports directly into the browser. Raw files are parsed in-memory without uploading to any external server.
-- **Interactive RFC 6901 Inspector**: Click any pointer to slide open the raw JSON evidence snippet and inspect epistemic boundaries.
+### Local Web Workspace
+- **Curated Evaluation Presets**: Instant one-click loading of *Scenario Y (Schema Divergence: CAPE v2.4 fixture vs Synthetic Falcon approximation)* and *Scenario X (Structural Variation: CAPE v2.4 fixture vs Sanitized CAPE v2.2 native fixture)*.
+- **Zero-Cloud Drag-and-Drop**: Drag any two sandbox JSON reports directly into the browser. Raw files are parsed in-memory on your CPU without uploading to any external server.
+- **RFC 6901 Evidence Inspector**: Click any pointer to slide open the raw JSON evidence snippet and inspect epistemic boundaries.
 - **One-Click Export**: Export an executive Markdown reconciliation diff (`.md`) or structured JSON delta.
 
 ### Command-Line Interface (CLI)
-Run automated comparisons directly in your terminal or CI/CD pipelines:
+
+**Python CLI**:
 ```bash
-# Compare two reports and output an executive Markdown diff
+# Compare two reports and print an executive Markdown diff
 sandbox-comparator compare --report-a data/report_format_a_cape.json --report-b data/report_format_b_falcon.json
 
 # Output structured JSON for automation & SOAR pipelines
-sandbox-comparator compare --report-a run1.json --report-b run2.json --format json
+sandbox-comparator compare --report-a run1.json --report-b run2.json --format json -o diff.json
+```
+
+**High-Performance Standalone Rust CLI**:
+For air-gapped forensic jump-boxes or CI/CD pipelines where Python is not installed:
+```bash
+# Build standalone native binary (<5ms execution runtime)
+make rust-build
+
+# Run native binary directly
+./rust/target/release/sandbox-comparator --report-a data/report_format_a_cape.json --report-b data/report_format_b_falcon.json
 ```
 
 ### Python SDK Usage
@@ -107,13 +144,13 @@ for p in comparison.reconciled_processes:
 
 ### The Offline-First Security Guarantee
 When analyzing proprietary threat intelligence or incident response artifacts, telemetry privacy is non-negotiable. 
-- The application binds exclusively to `127.0.0.1`.
-- Raw report JSONs are parsed in-memory on your local CPU.
-- Zero analytics, telemetry, or external API pings are performed.
+- **Strict Loopback Binding**: The local web UI server binds exclusively to `127.0.0.1:8000` by default. Do not expose this server to `0.0.0.0` or untrusted LANs without TLS and authentication.
+- **In-Memory Local Processing**: Raw report JSONs are parsed in-memory on your local CPU.
+- **Zero External Telemetry or Font Requests**: The interface relies 100% on native system UI fonts; no assets are loaded from Google Fonts, CDNs, or external APIs.
 
 ---
 
-## 4. Reconciliation Engine Principles
+## 5. Reconciliation Engine Principles
 
 ### 1. Process Alignment via Global Bipartite Matching
 Rather than greedy top-down traversal, the reconciler evaluates all candidate process pairs across reports and resolves the global maximum similarity assignment.
@@ -131,7 +168,7 @@ Network records are treated strictly as socket logs:
 
 ---
 
-## 5. Repository Provenance & Commit Ledger
+## 6. Repository Provenance & Commit Ledger
 
 The `sandbox_comparator` engine originated within a broader malware research monorepo (`apt36-rapidrust-research`) and was extracted into this standalone public repository via `git subtree split`. Because `git subtree split` synthesizes new root-level commits, the commit hashes correspond as follows:
 
@@ -145,18 +182,18 @@ All fixture hashes in `data/*.json` match the SHA-256 ledger in `PILOT_PACKET.md
 
 ---
 
-## 6. Supported Schemas & Extensibility
+## 7. Supported Schemas & Extensibility
 
 | Sandbox Platform | Schema Level | Provenance Status | Parser Module |
 | :--- | :--- | :--- | :--- |
-| **CAPE Sandbox v2.x** | Documented Vendor Schema | Certified Open-Source Community Spec | `engine.parsers.cape_parser` |
-| **Falcon Sandbox Cloud** | Synthetic v7.x Approximation | Synthesized Behavioral Approximation | `engine.parsers.falcon_parser` |
+| **CAPE Sandbox v2.x** | Documented Open-Source Schema | Verified against CAPE v2.2 & v2.4 JSON dumps | `engine.parsers.cape_parser` |
+| **Falcon Sandbox Cloud** | Synthetic v7.x Approximation | Synthesized Behavioral Approximation Fixture | `engine.parsers.falcon_parser` |
 | **Cuckoo Sandbox v2.x** | Community Layout | Backward-Compatible Ingestion | `engine.parsers.cape_parser` |
 | **Custom / Unknown** | Generic Autodetection | Defensive Fallback Parser | `engine.parsers.detector` |
 
 ---
 
-## 7. Calibration Limitations & Methodology Guardrails
+## 8. Calibration Limitations & Methodology Guardrails
 
 In compliance with scientific transparency and auditability:
 - **Heuristic Calibration Corpus**: The empirical similarity matcher was calibrated on $N=16$ development pairs and tested on $N=16$ held-out pairs.
@@ -165,7 +202,7 @@ In compliance with scientific transparency and auditability:
 
 ---
 
-## 8. Test Suite & Verification
+## 9. Test Suite & Verification
 
 Run the full automated unit test suite (28 unit and regression tests):
 ```bash
@@ -186,7 +223,7 @@ python3 -m unittest test_holdout_and_provenance.py
 
 ---
 
-## 9. Product Editions & Commercial Roadmap
+## 10. Product Editions & Commercial Roadmap
 
 Sandbox Comparator is built under an open-core, utility-first model:
 - **Community Edition (Free / MIT)**: 100% offline-first CLI and local web workspace; CAPE, Falcon, and Cuckoo ingestion; global bipartite matching; RFC 6901 evidence inspector; Markdown exports.
@@ -197,7 +234,7 @@ For complete product specifications, compliance alignment (GDPR / HIPAA / SOC 2)
 
 ---
 
-## 10. License
+## 11. License
 
 Released under the [MIT License](LICENSE).
 

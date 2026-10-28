@@ -12,7 +12,7 @@ authors = [
 ]
 license = { text = "MIT" }
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Information Technology",
     "Intended Audience :: Science/Research",
     "Topic :: Security",
@@ -51,5 +51,9 @@ sandbox-comparator-ui = "run_app:main"
 [tool.setuptools]
 py-modules = ["cli", "run_app"]
 
+[tool.setuptools.package-data]
+web = ["static/*"]
+data = ["*.json"]
+
 [tool.setuptools.packages.find]
-include = ["engine*", "web*"]
+include = ["engine*", "web*", "data*"]

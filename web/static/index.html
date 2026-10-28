@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Evidence-Aware Sandbox Comparator | Offline-First Forensic Diff</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Evidence-Aware Sandbox Comparator | Local-First Forensic Diff</title>
+  <!-- No external font requests: 100% self-contained local system font stack -->
   <style>
     :root {
       --bg-primary: #070a12;
@@ -28,11 +26,13 @@
       --blue-bg: rgba(56, 189, 248, 0.12);
       --purple: #a855f7;
       --purple-bg: rgba(168, 85, 247, 0.12);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: var(--font-sans);
       background-color: var(--bg-primary);
       color: var(--text-main);
       line-height: 1.5;
@@ -41,7 +41,7 @@
     }
 
     code, pre, .mono {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--font-mono);
       font-size: 12.5px;
     }
 
@@ -268,7 +268,7 @@
       letter-spacing: 0.4px;
     }
     .target-data {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--font-mono);
       font-size: 12px;
       color: var(--blue);
     }
@@ -317,7 +317,7 @@
       padding: 1px 6px;
       border-radius: 10px;
       font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--font-mono);
     }
 
     /* Table Styles */
@@ -379,7 +379,7 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--font-mono);
       font-weight: 600;
       font-size: 12px;
     }
@@ -401,7 +401,7 @@
       color: var(--blue);
       text-decoration: none;
       cursor: pointer;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--font-mono);
       font-size: 11.5px;
       display: inline-flex;
       align-items: center;
@@ -493,7 +493,7 @@
       border-radius: 6px;
       padding: 12px;
       overflow-x: auto;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: var(--font-mono);
       font-size: 12px;
       color: #38bdf8;
       max-height: 280px;
@@ -543,8 +543,8 @@
       <div class="brand-tag">v1.0 Local-First MVP</div>
     </div>
     <div class="header-badges">
-      <div class="badge-offline">100% Offline & Local</div>
-      <div class="brand-tag">Zero Telemetry Uploaded</div>
+      <div class="badge-offline">Local-Only (127.0.0.1)</div>
+      <div class="brand-tag">Zero Outbound Telemetry</div>
       <button class="btn btn-primary" onclick="exportMarkdown()">Export Report (.md)</button>
     </div>
   </header>
@@ -553,12 +553,12 @@
     <!-- Controls Panel -->
     <div class="controls-panel">
       <div class="preset-group">
-        <span style="font-size: 12px; font-weight: 600; color: var(--text-dim);">DEMO PRESETS:</span>
+        <span style="font-size: 12px; font-weight: 600; color: var(--text-dim);">EVALUATION PRESETS:</span>
         <button id="btn-preset-y" class="btn btn-active" onclick="loadPreset('scenario_y')">
-          Scenario Y: Cross-Vendor (CAPE v2.4 vs Falcon Cloud)
+          Scenario Y: Schema Divergence (CAPE v2.4 vs Synthetic Falcon-approx)
         </button>
         <button id="btn-preset-x" class="btn" onclick="loadPreset('scenario_x')">
-          Scenario X: Repeated Run (CAPE Run 1 vs Run 2)
+          Scenario X: Structural Variation (CAPE v2.4 vs Sanitized CAPE v2.2)
         </button>
       </div>
 
@@ -586,8 +586,12 @@
         <span class="target-data" id="banner-report-b">--</span>
       </div>
       <div class="target-item">
-        <span class="target-label">Reconciliation Algorithm</span>
-        <span class="target-data" style="color: var(--emerald);">Bipartite Global Assignment (Munkres)</span>
+        <span class="target-label">Fixture Provenance</span>
+        <span class="target-data" id="banner-fixture-type" style="color: var(--amber);">Curated Reference Fixtures</span>
+      </div>
+      <div class="target-item">
+        <span class="target-label">Reconciliation Engine</span>
+        <span class="target-data" style="color: var(--emerald);">Bipartite Global Assignment (Munkres / scipy)</span>
       </div>
     </div>
 
@@ -824,6 +828,17 @@
       const metaB = data.provenance_metadata[data.report_b_id] || {};
       document.getElementById('banner-report-a').textContent = `${data.report_a_id} (${metaA.sandbox || 'Generic'})`;
       document.getElementById('banner-report-b').textContent = `${data.report_b_id} (${metaB.sandbox || 'Generic'})`;
+
+      const bannerFix = document.getElementById('banner-fixture-type');
+      if (bannerFix) {
+        if (data.report_b_id.includes('falcon') || data.report_b_id.includes('approx')) {
+          bannerFix.textContent = 'Synthetic Approximation (Falcon schema) vs CAPE Fixture';
+        } else if (data.report_b_id.includes('sanitized') || data.report_b_id.includes('cape_run_2') || data.report_b_id.includes('v2.2')) {
+          bannerFix.textContent = 'Sanitized CAPE v2.2 Native Fixture vs CAPE Fixture';
+        } else {
+          bannerFix.textContent = 'User-Supplied Offline Reports';
+        }
+      }
 
       // Metrics
       document.getElementById('metric-procs-matched').textContent = data.metrics.matched_processes;

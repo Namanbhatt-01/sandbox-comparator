@@ -130,6 +130,7 @@ def main():
     parser.add_argument("--report-b", default="data/report_format_b_falcon.json", help="Path to Report B JSON")
     parser.add_argument("--vt-ref", default=None, help="Optional path to VT summary JSON for benchmark comparison")
     parser.add_argument("--format", choices=["text", "json", "markdown"], default="markdown", help="Output format")
+    parser.add_argument("-o", "--output", default=None, help="Optional output file path to write results")
     args = parser.parse_args()
 
     base_dir = Path(__file__).resolve().parent
@@ -156,9 +157,9 @@ def main():
             vt_evaluator = VTBenchmarkEvaluator(comparison, raw_vt)
             benchmark_res = vt_evaluator.evaluate_capabilities()
 
+    output_text = ""
     if args.format == "markdown":
-        md = format_markdown_report(comparison, benchmark_res)
-        print(md)
+        output_text = format_markdown_report(comparison, benchmark_res)
     elif args.format == "json":
         out_dict = {
             "sample_sha256": comparison.sample_sha256,
@@ -205,13 +206,23 @@ def main():
             ],
             "benchmark_evaluation": benchmark_res
         }
-        print(json.dumps(out_dict, indent=2))
+        output_text = json.dumps(out_dict, indent=2)
     else:
-        print("=== Evidence-Aware Sandbox Comparison Summary (Milestone 3) ===")
-        print(f"Sample: {comparison.sample_sha256}")
-        print(f"Files Reconciled: {len(comparison.reconciled_files)}")
-        print(f"Processes Reconciled: {len(comparison.reconciled_processes)}")
-        print(f"Network Events Reconciled: {len(comparison.reconciled_network)}")
+        lines = [
+            "=== Evidence-Aware Sandbox Comparison Summary ===",
+            f"Sample: {comparison.sample_sha256}",
+            f"Files Reconciled: {len(comparison.reconciled_files)}",
+            f"Processes Reconciled: {len(comparison.reconciled_processes)}",
+            f"Network Events Reconciled: {len(comparison.reconciled_network)}"
+        ]
+        output_text = "\n".join(lines)
+
+    if args.output:
+        out_file = Path(args.output)
+        out_file.write_text(output_text, encoding="utf-8")
+        print(f"Report successfully written to {out_file}")
+    else:
+        print(output_text)
 
 
 if __name__ == "__main__":
