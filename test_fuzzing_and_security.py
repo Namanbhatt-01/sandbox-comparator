@@ -190,6 +190,31 @@ class TestFuzzingAndSecurity(unittest.TestCase):
             self.assertNotIn("secret.key", str(exc.detail))
             self.assertNotIn("Fatal error", str(exc.detail))
 
+    def test_browser_dom_xss_execution_prevention(self):
+        """Executes the live web UI inside WHATWG JSDOM to verify zero script execution on hostile payloads."""
+        import shutil
+        import subprocess
+        from pathlib import Path
+
+        js_script = Path(__file__).resolve().parent / "test_dom_xss.js"
+        if not js_script.exists():
+            self.skipTest("test_dom_xss.js not found")
+
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("Node.js runtime not found on host")
+
+        res = subprocess.run(
+            [node_bin, str(js_script)],
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(
+            res.returncode, 0,
+            f"DOM XSS Suite failed with output:\n{res.stdout}\n{res.stderr}"
+        )
+        self.assertIn("PASS: Browser-level DOM security suite verified", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

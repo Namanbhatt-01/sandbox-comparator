@@ -768,6 +768,7 @@
   <script>
     let currentComparison = null;
     let evidenceRegistry = [];
+    window.evidenceRegistry = evidenceRegistry;
 
     async function loadPreset(presetId) {
       document.getElementById('btn-preset-y').classList.toggle('btn-active', presetId === 'scenario_y');
@@ -823,6 +824,7 @@
     function renderComparison(data) {
       currentComparison = data;
       evidenceRegistry = [];
+      window.evidenceRegistry = evidenceRegistry;
 
       // Banner
       document.getElementById('banner-sha256').textContent = data.sample_sha256 || 'Unknown';
@@ -882,7 +884,7 @@
           if (ptr && ptr.is_available) {
             const evIdx = evidenceRegistry.length;
             evidenceRegistry.push({
-              title: p.image_name,
+              title: p.image_name || p.image || 'Unknown Process',
               pointer: ptr.json_pointer,
               summary: ptr.event_summary,
               epistemic: p.epistemic_interpretation,
@@ -896,7 +898,7 @@
 
         tr.innerHTML = `
           <td>
-            <div style="font-weight:600;">${escapeHtml(p.image_name)}</div>
+            <div style="font-weight:600;">${escapeHtml(p.image_name || p.image || 'Unknown Process')}</div>
             <div class="mono" style="font-size: 11px; color: var(--text-dim);">${lineageSafe}</div>
           </td>
           <td>${presencePill}</td>

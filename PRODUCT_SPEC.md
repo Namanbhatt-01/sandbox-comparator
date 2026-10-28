@@ -80,13 +80,13 @@ Sandbox Comparator is offered under a transparent, utility-grounded licensing mo
 
 ```
 +----------------------------------------------------------------------------------------------------+
-| 100% OFFLINE-FIRST CLIENT ARCHITECTURE                                                             |
+| 100% OFFLINE-FIRST CLIENT ARCHITECTURE (CURRENT LOCAL-FIRST MVP)                                   |
 |                                                                                                    |
 |  [ Analyst Browser / CLI ]                                                                         |
 |            |                                                                                       |
 |            | (HTTP Localhost / RFC 6901 Pointers)                                                  |
 |            v                                                                                       |
-|  [ Local Python Engine: FastAPI + Munkres Matcher + Schema Sniffer ]                               |
+|  [ Local Python/Rust Engine: FastAPI / Rust CLI + Bipartite Matcher + Schema Sniffer ]             |
 |            |                                                                                       |
 |            +----> [ Report A JSON ] (In-Memory Processing Only)                                    |
 |            +----> [ Report B JSON ] (In-Memory Processing Only)                                    |
@@ -94,6 +94,10 @@ Sandbox Comparator is offered under a transparent, utility-grounded licensing mo
 |  X ZERO CLOUD TRANSMISSION  |  X ZERO EXTERNAL TELEMETRY  |  X AIR-GAPPED READY                    |
 +----------------------------------------------------------------------------------------------------+
 ```
+
+> **Implementation vs. Future Roadmap Distinction**:
+> - **Current Implementation (Security-Hardened Local MVP)**: Executes as a local daemon or standalone Rust CLI binary binding exclusively to `127.0.0.1:8000`. Report parsing, bipartite graph matching, and provenance indexing occur entirely on localhost. Local system font fallbacks and self-contained static assets ensure zero external web requests.
+> - **Future Commercial Architecture (Planned Team Tier)**: Browser-native SQLite WASM + OPFS (Origin Private File System) background worker for client-side storage, paired with an optional transactional outbox and sync service (e.g., PowerSync / ElectricSQL) streaming deltas to an enterprise-controlled PostgreSQL backend.
 
 ### Privacy & Regulatory Design Considerations
 *Disclaimer: Sandbox Comparator is an independent software tool. The following points represent architectural privacy design principles rather than formal regulatory certification or compliance attestation.*

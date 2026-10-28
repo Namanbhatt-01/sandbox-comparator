@@ -54,6 +54,7 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     procs_out = [
         {
             "image": p.image_name,
+            "image_name": p.image_name,
             "lineage_path": p.lineage_path,
             "depth": len(p.lineage_path),
             "observation_presence": p.observation_presence.value,

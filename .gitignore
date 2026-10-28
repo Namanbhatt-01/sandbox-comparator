@@ -41,6 +41,10 @@ rust/target/
 *.swp
 *.swo
 
+# Node / JavaScript
+node_modules/
+.npm/
+
 # Testing & Coverage
 .pytest_cache/
 .coverage

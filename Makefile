@@ -1,13 +1,14 @@
-.PHONY: help install test ui compare benchmark clean rust-build rust-test test-all
+.PHONY: help install test dom-test ui compare benchmark clean rust-build rust-test test-all
 
 help:
 	@echo "Sandbox Comparator — Product Developer Commands"
 	@echo "==============================================="
 	@echo "  make install    Install Python dependencies"
-	@echo "  make test       Run the complete 33-test Python verification and security suite"
+	@echo "  make test       Run the complete 34-test Python and DOM security verification suite"
+	@echo "  make dom-test   Run the browser-level WHATWG DOM XSS regression suite (Node/JSDOM)"
 	@echo "  make rust-build Build the standalone high-performance Rust core CLI"
 	@echo "  make rust-test  Run Rust unit and parity integration tests"
-	@echo "  make test-all   Run both Python and Rust test suites"
+	@echo "  make test-all   Run both Python, DOM, and Rust test suites"
 	@echo "  make ui         Launch the local-first web application (http://127.0.0.1:8000)"
 	@echo "  make compare    Run CLI report comparison on default demo fixtures"
 	@echo "  make benchmark  Run performance and runtime benchmark"
@@ -20,13 +21,16 @@ install:
 test:
 	python3 -m unittest discover -s . -p "test_*.py"
 
+dom-test:
+	node test_dom_xss.js
+
 rust-build:
 	cd rust && cargo build --release
 
 rust-test:
 	cd rust && cargo test
 
-test-all: test rust-test
+test-all: test dom-test rust-test
 
 ui:
 	python3 run_app.py
