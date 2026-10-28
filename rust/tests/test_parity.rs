@@ -448,3 +448,107 @@ fn test_network_repeated_events_attribute_alignment_not_blind_position_parity() 
         );
     }
 }
+
+#[test]
+fn test_possible_match_causal_explanation_and_alternatives_exclusion_parity() {
+    let ptr = EvidencePointer::available("rep", "/proc/0", "proc", serde_json::json!({}));
+
+    let p_a0 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 100,
+        source_ppid: Some(1),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c script.bat -v -d".to_string(),
+        lineage_path: vec!["sample.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 1,
+        evidence: ptr.clone(),
+    };
+    let p_a1 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 101,
+        source_ppid: Some(1),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c script.bat -v".to_string(),
+        lineage_path: vec!["sample.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 1,
+        evidence: ptr.clone(),
+    };
+
+    let p_b0 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 200,
+        source_ppid: Some(1),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c script.bat -v -d".to_string(),
+        lineage_path: vec!["sample.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 1,
+        evidence: ptr.clone(),
+    };
+    let p_b1 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 201,
+        source_ppid: Some(1),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c script.bat -v -q".to_string(),
+        lineage_path: vec!["sample.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 1,
+        evidence: ptr,
+    };
+
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "CAPE".to_string(),
+        schema_provenance_type: "DOCUMENTED_VENDOR_FORMAT".to_string(),
+        sample_sha256: "aaa".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_a0, p_a1],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "Falcon".to_string(),
+        schema_provenance_type: "DOCUMENTED_VENDOR_FORMAT".to_string(),
+        sample_sha256: "aaa".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_b0, p_b1],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let comparator = EvidenceComparator::new(&norm_a, &norm_b);
+    let comparison = comparator.reconcile();
+
+    let possible_matches: Vec<_> = comparison
+        .reconciled_processes
+        .iter()
+        .filter(|p| p.confidence == ProcessMatchConfidence::POSSIBLE_MATCH)
+        .collect();
+
+    assert!(!possible_matches.is_empty(), "Expected at least one POSSIBLE_MATCH");
+
+    for proc in possible_matches {
+        let pid_b = proc.pids_by_report.get("rep_b");
+        assert_ne!(
+            proc.causal_explanation,
+            CausalExplanation::CORROBORATED_EXECUTION,
+            "POSSIBLE_MATCH must not be assigned CORROBORATED_EXECUTION"
+        );
+        for alt in &proc.alternative_candidates {
+            assert_ne!(
+                Some(&alt.report_b_pid),
+                pid_b,
+                "Selected match PID {:?} appeared in its own alternative candidates!",
+                pid_b
+            );
+        }
+    }
+}

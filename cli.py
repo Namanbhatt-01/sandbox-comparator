@@ -58,7 +58,7 @@ def format_markdown_report(comparison, vt_eval=None) -> str:
     lines.append(f"- **Report A**: `{comparison.report_a_id}` ({meta_a.get('sandbox')}) — Provenance: `{meta_a.get('provenance_type')}`")
     lines.append(f"- **Report B**: `{comparison.report_b_id}` ({meta_b.get('sandbox')}) — Provenance: `{meta_b.get('provenance_type')}`\n")
 
-    matched_procs = sum(1 for p in comparison.reconciled_processes if p.observation_presence.value == "OBSERVED_IN_BOTH")
+    matched_procs = sum(1 for p in comparison.reconciled_processes if p.confidence.value == "MATCHED")
     matched_files = sum(1 for f in comparison.reconciled_files if f.observation_presence.value == "OBSERVED_IN_BOTH")
     unresolved_net = sum(1 for n in comparison.reconciled_network if n.observation_presence.value != "OBSERVED_IN_BOTH")
     total_lims = sum(len(v) for v in comparison.collection_limitations.values())

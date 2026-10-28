@@ -481,18 +481,20 @@ impl<'a> EvidenceComparator<'a> {
                     pids.insert(self.report_b.report_id.clone(), p_b.source_pid);
                     commands.insert(self.report_b.report_id.clone(), p_b.command_line.clone());
 
-                    let a_cands = &candidates_by_a[idx_a];
                     let mut is_ambiguous = false;
-                    if a_cands.len() > 1 && (best_score - a_cands[1].1) < 0.15 {
-                        is_ambiguous = true;
-                        for &(c_idx, c_score, ref c_rat) in &a_cands[1..] {
-                            alternatives.push(ProcessAlternativeCandidate {
-                                report_b_pid: procs_b[c_idx].source_pid,
-                                image: procs_b[c_idx].image_name.clone(),
-                                score: c_score,
-                                rationale: c_rat.clone(),
-                            });
+                    for &(c_idx, c_score, ref c_rat) in candidates_by_a[idx_a].iter() {
+                        if c_idx == best_idx_b {
+                            continue;
                         }
+                        if (best_score - c_score).abs() < 0.15 {
+                            is_ambiguous = true;
+                        }
+                        alternatives.push(ProcessAlternativeCandidate {
+                            report_b_pid: procs_b[c_idx].source_pid,
+                            image: procs_b[c_idx].image_name.clone(),
+                            score: c_score,
+                            rationale: c_rat.clone(),
+                        });
                     }
 
                     if best_score >= 0.80 && !is_ambiguous {
@@ -513,13 +515,15 @@ impl<'a> EvidenceComparator<'a> {
                             ProcessMatchConfidence::POSSIBLE_MATCH,
                             best_score,
                             best_rat.clone(),
-                            CausalExplanation::CORROBORATED_EXECUTION,
-                            "Plausible candidate alignment with potential ambiguity across candidate nodes."
-                                .to_string(),
+                            CausalExplanation::UNEXPLAINED,
+                            format!(
+                                "Plausible candidate alignment (PID A={}, PID B={}) with score {:.2}, but ambiguity across candidate nodes prevents definitive corroboration.",
+                                p_a.source_pid, p_b.source_pid, best_score
+                            ),
                         )
                     }
                 } else {
-                    let causal = self.evaluate_file_causality(self.report_b);
+                    let causal = self.evaluate_process_causality(self.report_b);
                     evidence_links.insert(
                         self.report_b.report_id.clone(),
                         EvidencePointer::missing(
@@ -564,7 +568,7 @@ impl<'a> EvidenceComparator<'a> {
             if matched_b_indices.contains(&idx_b) {
                 continue;
             }
-            let causal = self.evaluate_file_causality(self.report_a);
+            let causal = self.evaluate_process_causality(self.report_a);
             let mut evidence_links = BTreeMap::new();
             evidence_links.insert(self.report_b.report_id.clone(), p_b.evidence.clone());
             evidence_links.insert(
@@ -926,9 +930,18 @@ impl<'a> EvidenceComparator<'a> {
         )
     }
 
+    fn evaluate_process_causality(&self, target_report: &NormalizedReport) -> CausalExplanation {
+        for lim in &target_report.limitations {
+            if lim.category == "TIMEOUT" || lim.category == "ANTI_EVASION" || lim.category == "CRASH" {
+                return CausalExplanation::POTENTIAL_ENVIRONMENT_LIMITATION;
+            }
+        }
+        CausalExplanation::UNEXPLAINED
+    }
+
     fn evaluate_file_causality(&self, target_report: &NormalizedReport) -> CausalExplanation {
         for lim in &target_report.limitations {
-            if lim.category == "TIMEOUT" {
+            if lim.category == "TIMEOUT" || lim.category == "DISK_QUOTA" || lim.category == "DROP_LIMIT" {
                 return CausalExplanation::POTENTIAL_ENVIRONMENT_LIMITATION;
             }
         }

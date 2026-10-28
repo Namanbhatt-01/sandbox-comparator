@@ -249,6 +249,45 @@ class TestEngineHardening(unittest.TestCase):
                 f"Mismatched pairing: A sport={ptr_a.raw_snippet.get('sport')} paired with B sport={ptr_b.raw_snippet.get('sport')}"
             )
 
+    def test_possible_match_causal_explanation_and_alternatives_exclusion(self):
+        """
+        Verify:
+        1. When process match confidence is POSSIBLE_MATCH, causal explanation is NOT CORROBORATED_EXECUTION.
+        2. Selected match is never included in its own alternative_candidates list.
+        """
+        ptr = EvidencePointer("rep", "/proc/0", "proc", {}, True)
+
+        p_a0 = ProcessObservation("rep_a", 100, 1, "cmd.exe", "cmd.exe /c script.bat -v -d", ["sample.exe", "cmd.exe"], 1, ptr)
+        p_a1 = ProcessObservation("rep_a", 101, 1, "cmd.exe", "cmd.exe /c script.bat -v", ["sample.exe", "cmd.exe"], 1, ptr)
+
+        p_b0 = ProcessObservation("rep_b", 200, 1, "cmd.exe", "cmd.exe /c script.bat -v -d", ["sample.exe", "cmd.exe"], 1, ptr)
+        p_b1 = ProcessObservation("rep_b", 201, 1, "cmd.exe", "cmd.exe /c script.bat -v -q", ["sample.exe", "cmd.exe"], 1, ptr)
+
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, processes=[p_a0, p_a1])
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, processes=[p_b0, p_b1])
+
+        comparator = EvidenceComparator(rep_a, rep_b)
+        result = comparator.reconcile()
+
+        possible_matches = [p for p in result.reconciled_processes if p.confidence.value == "POSSIBLE_MATCH"]
+        self.assertGreater(len(possible_matches), 0, "Expected at least one POSSIBLE_MATCH")
+
+        for proc in possible_matches:
+            pid_b = proc.pids_by_report.get("rep_b")
+            # Must not claim corroborated execution when match confidence is only possible/ambiguous
+            self.assertNotEqual(
+                proc.causal_explanation.value,
+                "CORROBORATED_EXECUTION",
+                "POSSIBLE_MATCH must not be assigned CORROBORATED_EXECUTION"
+            )
+            # The selected B PID must never appear in its own alternatives
+            for alt in proc.alternative_candidates:
+                self.assertNotEqual(
+                    alt.get("report_b_pid"),
+                    pid_b,
+                    f"Selected match PID {pid_b} appeared in its own alternative candidates!"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

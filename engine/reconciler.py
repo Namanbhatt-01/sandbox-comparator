@@ -342,15 +342,17 @@ class EvidenceComparator:
 
                 is_ambiguous = False
                 a_cands = candidates_by_a.get(idx_a, [])
-                if len(a_cands) > 1 and (best_score - a_cands[1][1]) < 0.15:
-                    is_ambiguous = True
-                    for c_idx, c_score, c_rat in a_cands[1:]:
-                        alternatives.append({
-                            "report_b_pid": procs_b[c_idx].source_pid,
-                            "image": procs_b[c_idx].image_name,
-                            "score": c_score,
-                            "rationale": c_rat
-                        })
+                alt_cands = [c for c in a_cands if c[0] != best_idx_b]
+                for c_idx, c_score, c_rat in alt_cands:
+                    if abs(best_score - c_score) < 0.15:
+                        is_ambiguous = True
+                    alternatives.append({
+                        "report_b_pid": procs_b[c_idx].source_pid,
+                        "image": procs_b[c_idx].image_name,
+                        "score": c_score,
+                        "rationale": c_rat,
+                        "claimed_by_other": c_idx in matched_b_indices and c_idx != best_idx_b
+                    })
 
                 if best_score >= 0.80 and not is_ambiguous:
                     confidence = ProcessMatchConfidence.MATCHED
@@ -360,12 +362,15 @@ class EvidenceComparator:
                 else:
                     confidence = ProcessMatchConfidence.POSSIBLE_MATCH
                     obs_presence = ObservationPresence.OBSERVED_IN_BOTH
-                    causal = CausalExplanation.CORROBORATED_EXECUTION
-                    interpretation = "Plausible candidate alignment with potential ambiguity across candidate nodes."
+                    causal = CausalExplanation.UNEXPLAINED
+                    interpretation = (
+                        f"Plausible candidate alignment (PID A={p_a.source_pid}, PID B={p_b.source_pid}) "
+                        f"with score {best_score:.2f}, but ambiguity across candidate nodes prevents definitive corroboration."
+                    )
             else:
                 confidence = ProcessMatchConfidence.UNRESOLVED
                 obs_presence = ObservationPresence.OBSERVED_ONLY_IN_A
-                causal = self._evaluate_file_causality(self.report_b)
+                causal = self._evaluate_process_causality(self.report_b)
                 evidence_links[self.report_b.report_id] = EvidencePointer(
                     report_id=self.report_b.report_id,
                     json_pointer="",
@@ -400,7 +405,7 @@ class EvidenceComparator:
         for idx_b, p_b in enumerate(procs_b):
             if idx_b in matched_b_indices:
                 continue
-            causal = self._evaluate_file_causality(self.report_a)
+            causal = self._evaluate_process_causality(self.report_a)
             evidence_links = {
                 self.report_b.report_id: p_b.evidence,
                 self.report_a.report_id: EvidencePointer(
@@ -698,8 +703,22 @@ class EvidenceComparator:
         )
         return CausalExplanation.UNEXPLAINED, None, None, interpretation, "UNLINKED", "UNKNOWN", "UNKNOWN"
 
-    def _evaluate_file_causality(self, target_report: NormalizedReport) -> CausalExplanation:
+    def _evaluate_process_causality(self, target_report: NormalizedReport) -> CausalExplanation:
+        """
+        Evaluates whether an unobserved process execution can be attributed to documented
+        sandbox environment limitations (e.g. TIMEOUT, ANTI_EVASION, CRASH).
+        """
         for lim in target_report.limitations:
-            if lim.category == "TIMEOUT":
+            if lim.category in ("TIMEOUT", "ANTI_EVASION", "CRASH"):
+                return CausalExplanation.POTENTIAL_ENVIRONMENT_LIMITATION
+        return CausalExplanation.UNEXPLAINED
+
+    def _evaluate_file_causality(self, target_report: NormalizedReport) -> CausalExplanation:
+        """
+        Evaluates whether an unrecorded dropped file can be attributed to documented
+        filesystem or sandbox capture limitations (e.g. TIMEOUT, DISK_QUOTA, DROP_LIMIT).
+        """
+        for lim in target_report.limitations:
+            if lim.category in ("TIMEOUT", "DISK_QUOTA", "DROP_LIMIT"):
                 return CausalExplanation.POTENTIAL_ENVIRONMENT_LIMITATION
         return CausalExplanation.UNEXPLAINED

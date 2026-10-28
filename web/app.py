@@ -102,8 +102,8 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
         ]
 
     # Metrics calculation
-    matched_procs = sum(1 for p in procs_out if p["observation_presence"] == "OBSERVED_IN_BOTH")
-    unresolved_procs = sum(1 for p in procs_out if p["observation_presence"] != "OBSERVED_IN_BOTH")
+    matched_procs = sum(1 for p in procs_out if p["confidence"] == "MATCHED")
+    unresolved_procs = sum(1 for p in procs_out if p["confidence"] != "MATCHED")
     matched_files = sum(1 for f in files_out if f["observation_presence"] == "OBSERVED_IN_BOTH")
     unresolved_files = sum(1 for f in files_out if f["observation_presence"] != "OBSERVED_IN_BOTH")
     matched_net = sum(1 for n in net_out if n["observation_presence"] == "OBSERVED_IN_BOTH")
