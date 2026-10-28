@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sandbox-comparator"
+version = "1.0.0"
+description = "Offline-first evidence-aware malware sandbox report comparison and provenance verification layer."
+readme = "README.md"
+authors = [
+    { name = "Naman Bhatt", email = "the.namanbhatt109@gmail.com" }
+]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent"
+]
+keywords = [
+    "malware-analysis",
+    "dfir",
+    "sandbox-reports",
+    "threat-intelligence",
+    "cape-sandbox",
+    "evidence-provenance",
+    "rfc6901"
+]
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.95.0",
+    "uvicorn>=0.20.0",
+    "pydantic>=1.10.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/Namanbhatt-01/sandbox-comparator"
+Documentation = "https://github.com/Namanbhatt-01/sandbox-comparator/blob/main/README.md"
+Repository = "https://github.com/Namanbhatt-01/sandbox-comparator.git"
+Issues = "https://github.com/Namanbhatt-01/sandbox-comparator/issues"
+
+[project.scripts]
+sandbox-comparator = "cli:main"
+sandbox-comparator-ui = "run_app:main"
+
+[tool.setuptools]
+py-modules = ["cli", "run_app"]
+
+[tool.setuptools.packages.find]
+include = ["engine*", "web*"]
