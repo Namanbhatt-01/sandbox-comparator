@@ -41,6 +41,10 @@ jobs:
       run: |
         node test_dom_xss.js
 
+    - name: Verify offline privacy and zero-egress compliance
+      run: |
+        python scripts/verify_offline_privacy.py
+
     - name: Run unit & regression test suite (34 tests)
       run: |
         python -m unittest discover -s . -p "test_*.py"

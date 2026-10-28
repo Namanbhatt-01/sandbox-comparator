@@ -1,18 +1,19 @@
-.PHONY: help install test dom-test ui compare benchmark clean rust-build rust-test test-all
+.PHONY: help install test dom-test audit-privacy ui compare benchmark clean rust-build rust-test test-all
 
 help:
 	@echo "Sandbox Comparator — Product Developer Commands"
 	@echo "==============================================="
-	@echo "  make install    Install Python dependencies"
-	@echo "  make test       Run the complete 34-test Python and DOM security verification suite"
-	@echo "  make dom-test   Run the browser-level WHATWG DOM XSS regression suite (Node/JSDOM)"
-	@echo "  make rust-build Build the standalone high-performance Rust core CLI"
-	@echo "  make rust-test  Run Rust unit and parity integration tests"
-	@echo "  make test-all   Run both Python, DOM, and Rust test suites"
-	@echo "  make ui         Launch the local-first web application (http://127.0.0.1:8000)"
-	@echo "  make compare    Run CLI report comparison on default demo fixtures"
-	@echo "  make benchmark  Run performance and runtime benchmark"
-	@echo "  make clean      Remove build artifacts, caches, and temp files"
+	@echo "  make install       Install Python dependencies"
+	@echo "  make test          Run the complete 34-test Python and DOM security verification suite"
+	@echo "  make dom-test      Run the browser-level WHATWG DOM XSS regression suite (Node/JSDOM)"
+	@echo "  make audit-privacy Verify offline zero-egress compliance and local font/asset integrity"
+	@echo "  make rust-build    Build the standalone high-performance Rust core CLI"
+	@echo "  make rust-test     Run Rust unit and parity integration tests"
+	@echo "  make test-all      Run all tests: Python, DOM XSS, Privacy Audit, and Rust Parity"
+	@echo "  make ui            Launch the local-first web application (http://127.0.0.1:8000)"
+	@echo "  make compare       Run CLI report comparison on default demo fixtures"
+	@echo "  make benchmark     Run performance and runtime benchmark"
+	@echo "  make clean         Remove build artifacts, caches, and temp files"
 
 install:
 	pip install -r requirements.txt
@@ -24,13 +25,16 @@ test:
 dom-test:
 	node test_dom_xss.js
 
+audit-privacy:
+	python3 scripts/verify_offline_privacy.py
+
 rust-build:
 	cd rust && cargo build --release
 
 rust-test:
 	cd rust && cargo test
 
-test-all: test dom-test rust-test
+test-all: test dom-test audit-privacy rust-test
 
 ui:
 	python3 run_app.py

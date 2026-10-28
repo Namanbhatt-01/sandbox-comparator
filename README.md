@@ -228,6 +228,9 @@ python3 -m unittest test_holdout_and_provenance.py
 
 # Verify Rust standalone CLI parity
 make rust-test
+
+# Verify zero-egress privacy & air-gap compliance
+make audit-privacy
 ```
 
 ---
@@ -243,8 +246,18 @@ For complete product specifications, compliance alignment (GDPR / HIPAA / SOC 2)
 
 ---
 
-## 11. License
+## 11. Security, Quality & Community Governance
+
+- **Security & Vulnerability Disclosure**: See [**SECURITY.md**](SECURITY.md) for our responsible disclosure policy, response SLAs, and security guarantees.
+- **Contributing Guidelines**: See [**CONTRIBUTING.md**](CONTRIBUTING.md) for local environment setup, parser contribution guidelines, and PR checklists.
+- **Code of Conduct**: We adhere to the [**Contributor Covenant v2.1**](CODE_OF_CONDUCT.md).
+- **Changelog & Releases**: See [**CHANGELOG.md**](CHANGELOG.md) for release notes across versions.
+
+---
+
+## 12. License
 
 Released under the [MIT License](LICENSE).
+Copyright (c) 2026 Naman Bhatt.
 
 
