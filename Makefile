@@ -29,3 +29,4 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.py[cod]" -delete
 	rm -rf build/ dist/ *.egg-info .pytest_cache/
+

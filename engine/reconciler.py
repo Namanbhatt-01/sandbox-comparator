@@ -97,89 +97,132 @@ class EvidenceComparator:
 
     def _reconcile_files(self) -> List[ReconciledFileItem]:
         results: List[ReconciledFileItem] = []
-        files_a: Dict[str, DroppedFileObservation] = {f.sha256: f for f in self.report_a.dropped_files}
-        files_b: Dict[str, DroppedFileObservation] = {f.sha256: f for f in self.report_b.dropped_files}
+        files_a_by_hash: Dict[str, List[DroppedFileObservation]] = {}
+        for f in self.report_a.dropped_files:
+            files_a_by_hash.setdefault(f.sha256, []).append(f)
 
-        all_hashes = sorted(list(set(files_a.keys()) | set(files_b.keys())))
+        files_b_by_hash: Dict[str, List[DroppedFileObservation]] = {}
+        for f in self.report_b.dropped_files:
+            files_b_by_hash.setdefault(f.sha256, []).append(f)
+
+        all_hashes = sorted(list(set(files_a_by_hash.keys()) | set(files_b_by_hash.keys())))
 
         for h in all_hashes:
-            fa = files_a.get(h)
-            fb = files_b.get(h)
+            list_a = list(files_a_by_hash.get(h, []))
+            list_b = list(files_b_by_hash.get(h, []))
 
-            filenames: Dict[str, str] = {}
-            filepaths: Dict[str, str] = {}
-            evidence_links: Dict[str, EvidencePointer] = {}
-            is_malformed = (fa.is_malformed_hash if fa else False) or (fb.is_malformed_hash if fb else False)
+            matched_pairs: List[Tuple[Optional[DroppedFileObservation], Optional[DroppedFileObservation]]] = []
+            used_b_indices: Set[int] = set()
 
-            if fa and fb:
-                obs_presence = ObservationPresence.OBSERVED_IN_BOTH
-                causal = CausalExplanation.CORROBORATED_EXECUTION
-                filenames[self.report_a.report_id] = fa.file_name
-                filenames[self.report_b.report_id] = fb.file_name
-                filepaths[self.report_a.report_id] = fa.file_path
-                filepaths[self.report_b.report_id] = fb.file_path
-                evidence_links[self.report_a.report_id] = fa.evidence
-                evidence_links[self.report_b.report_id] = fb.evidence
+            for fa in list_a:
+                best_b_idx = None
+                # First try exact path match
+                for b_idx, fb in enumerate(list_b):
+                    if b_idx in used_b_indices:
+                        continue
+                    if fa.file_path and fb.file_path and fa.file_path.strip().lower() == fb.file_path.strip().lower():
+                        best_b_idx = b_idx
+                        break
+                # Next try exact filename match
+                if best_b_idx is None:
+                    for b_idx, fb in enumerate(list_b):
+                        if b_idx in used_b_indices:
+                            continue
+                        if fa.file_name and fb.file_name and fa.file_name.strip().lower() == fb.file_name.strip().lower():
+                            best_b_idx = b_idx
+                            break
+                # Next take first available with same hash
+                if best_b_idx is None:
+                    for b_idx, fb in enumerate(list_b):
+                        if b_idx not in used_b_indices:
+                            best_b_idx = b_idx
+                            break
 
-                if fa.file_name != fb.file_name:
-                    interpretation = (
-                        f"Matched by SHA-256 hash across naming discrepancies. "
-                        f"Report A recorded '{fa.file_name}'; Report B recorded '{fb.file_name}'."
-                    )
+                if best_b_idx is not None:
+                    used_b_indices.add(best_b_idx)
+                    matched_pairs.append((fa, list_b[best_b_idx]))
                 else:
-                    interpretation = f"Corroborated by SHA-256 hash and identical filename '{fa.file_name}'."
+                    matched_pairs.append((fa, None))
 
-            elif fa and not fb:
-                obs_presence = ObservationPresence.OBSERVED_ONLY_IN_A
-                causal = self._evaluate_file_causality(self.report_b)
-                filenames[self.report_a.report_id] = fa.file_name
-                filepaths[self.report_a.report_id] = fa.file_path
-                evidence_links[self.report_a.report_id] = fa.evidence
-                evidence_links[self.report_b.report_id] = EvidencePointer(
-                    report_id=self.report_b.report_id,
-                    json_pointer="",
-                    event_summary=f"SHA-256 {h[:12]}... unrecorded in Report B",
-                    raw_snippet={},
-                    is_available=False,
-                    missing_reason=f"File hash {h} not found in {self.report_b.report_id} created_files telemetry"
-                )
-                interpretation = (
-                    f"Observed only in Report A ('{fa.file_name}'). "
-                    f"Report B telemetry does not record this file; this does not establish non-occurrence."
-                )
+            for b_idx, fb in enumerate(list_b):
+                if b_idx not in used_b_indices:
+                    matched_pairs.append((None, fb))
 
-            else:
-                assert fb is not None
-                obs_presence = ObservationPresence.OBSERVED_ONLY_IN_B
-                causal = self._evaluate_file_causality(self.report_a)
-                filenames[self.report_b.report_id] = fb.file_name
-                filepaths[self.report_b.report_id] = fb.file_path
-                evidence_links[self.report_b.report_id] = fb.evidence
-                evidence_links[self.report_a.report_id] = EvidencePointer(
-                    report_id=self.report_a.report_id,
-                    json_pointer="",
-                    event_summary=f"SHA-256 {h[:12]}... unrecorded in Report A",
-                    raw_snippet={},
-                    is_available=False,
-                    missing_reason=f"File hash {h} not found in {self.report_a.report_id} dropped telemetry"
-                )
-                interpretation = (
-                    f"Observed only in Report B ('{fb.file_name}'). "
-                    f"Report A telemetry does not record this file; this does not establish non-occurrence."
-                )
+            for fa, fb in matched_pairs:
+                filenames: Dict[str, str] = {}
+                filepaths: Dict[str, str] = {}
+                evidence_links: Dict[str, EvidencePointer] = {}
+                is_malformed = (fa.is_malformed_hash if fa else False) or (fb.is_malformed_hash if fb else False)
 
-            results.append(
-                ReconciledFileItem(
-                    sha256=h,
-                    observation_presence=obs_presence,
-                    causal_explanation=causal,
-                    filenames_by_report=filenames,
-                    file_paths_by_report=filepaths,
-                    evidence_links=evidence_links,
-                    epistemic_interpretation=interpretation,
-                    is_malformed_hash=is_malformed
+                if fa and fb:
+                    obs_presence = ObservationPresence.OBSERVED_IN_BOTH
+                    causal = CausalExplanation.CORROBORATED_EXECUTION
+                    filenames[self.report_a.report_id] = fa.file_name
+                    filenames[self.report_b.report_id] = fb.file_name
+                    filepaths[self.report_a.report_id] = fa.file_path
+                    filepaths[self.report_b.report_id] = fb.file_path
+                    evidence_links[self.report_a.report_id] = fa.evidence
+                    evidence_links[self.report_b.report_id] = fb.evidence
+
+                    if fa.file_name != fb.file_name:
+                        interpretation = (
+                            f"Matched by SHA-256 hash across naming discrepancies. "
+                            f"Report A recorded '{fa.file_name}'; Report B recorded '{fb.file_name}'."
+                        )
+                    else:
+                        interpretation = f"Corroborated by SHA-256 hash and identical filename '{fa.file_name}'."
+
+                elif fa and not fb:
+                    obs_presence = ObservationPresence.OBSERVED_ONLY_IN_A
+                    causal = self._evaluate_file_causality(self.report_b)
+                    filenames[self.report_a.report_id] = fa.file_name
+                    filepaths[self.report_a.report_id] = fa.file_path
+                    evidence_links[self.report_a.report_id] = fa.evidence
+                    evidence_links[self.report_b.report_id] = EvidencePointer(
+                        report_id=self.report_b.report_id,
+                        json_pointer="",
+                        event_summary=f"SHA-256 {h[:12]}... unrecorded in Report B",
+                        raw_snippet={},
+                        is_available=False,
+                        missing_reason=f"File hash {h} not found in {self.report_b.report_id} created_files telemetry"
+                    )
+                    interpretation = (
+                        f"Observed only in Report A ('{fa.file_name}'). "
+                        f"Report B telemetry does not record this file; this does not establish non-occurrence."
+                    )
+
+                else:
+                    assert fb is not None
+                    obs_presence = ObservationPresence.OBSERVED_ONLY_IN_B
+                    causal = self._evaluate_file_causality(self.report_a)
+                    filenames[self.report_b.report_id] = fb.file_name
+                    filepaths[self.report_b.report_id] = fb.file_path
+                    evidence_links[self.report_b.report_id] = fb.evidence
+                    evidence_links[self.report_a.report_id] = EvidencePointer(
+                        report_id=self.report_a.report_id,
+                        json_pointer="",
+                        event_summary=f"SHA-256 {h[:12]}... unrecorded in Report A",
+                        raw_snippet={},
+                        is_available=False,
+                        missing_reason=f"File hash {h} not found in {self.report_a.report_id} dropped telemetry"
+                    )
+                    interpretation = (
+                        f"Observed only in Report B ('{fb.file_name}'). "
+                        f"Report A telemetry does not record this file; this does not establish non-occurrence."
+                    )
+
+                results.append(
+                    ReconciledFileItem(
+                        sha256=h,
+                        observation_presence=obs_presence,
+                        causal_explanation=causal,
+                        filenames_by_report=filenames,
+                        file_paths_by_report=filepaths,
+                        evidence_links=evidence_links,
+                        epistemic_interpretation=interpretation,
+                        is_malformed_hash=is_malformed
+                    )
                 )
-            )
 
         return results
 
@@ -259,31 +302,49 @@ class EvidenceComparator:
         procs_a = self.report_a.processes
         procs_b = self.report_b.processes
 
-        matched_b_indices: Set[int] = set()
+        # Step 1: Compute all pairwise similarity scores
+        candidates_by_a: Dict[int, List[Tuple[int, float, str]]] = {i: [] for i in range(len(procs_a))}
+        all_candidate_pairs: List[Tuple[float, int, int, str]] = []
 
-        for p_a in procs_a:
-            candidates: List[Tuple[int, float, str]] = []
+        for idx_a, p_a in enumerate(procs_a):
             for idx_b, p_b in enumerate(procs_b):
-                if idx_b in matched_b_indices:
-                    continue
                 score, rationale = self._score_process_pair(p_a, p_b)
                 if score >= 0.45:
-                    candidates.append((idx_b, score, rationale))
+                    candidates_by_a[idx_a].append((idx_b, score, rationale))
+                    all_candidate_pairs.append((score, idx_a, idx_b, rationale))
 
-            candidates.sort(key=lambda x: x[1], reverse=True)
+        for idx_a in candidates_by_a:
+            candidates_by_a[idx_a].sort(key=lambda x: x[1], reverse=True)
 
+        # Step 2: Global maximum weight bipartite matching (highest scores matched first)
+        all_candidate_pairs.sort(key=lambda x: x[0], reverse=True)
+        matched_a_to_b: Dict[int, Tuple[int, float, str]] = {}
+        matched_b_indices: Set[int] = set()
+
+        for score, idx_a, idx_b, rationale in all_candidate_pairs:
+            if idx_a not in matched_a_to_b and idx_b not in matched_b_indices:
+                matched_a_to_b[idx_a] = (idx_b, score, rationale)
+                matched_b_indices.add(idx_b)
+
+        # Step 3: Emit reconciled items for processes in A
+        for idx_a, p_a in enumerate(procs_a):
             evidence_links: Dict[str, EvidencePointer] = {self.report_a.report_id: p_a.evidence}
             pids: Dict[str, int] = {self.report_a.report_id: p_a.source_pid}
             commands: Dict[str, str] = {self.report_a.report_id: p_a.command_line}
             alternatives: List[Dict[str, Any]] = []
 
-            if candidates:
-                best_idx_b, best_score, best_rationale = candidates[0]
-                is_ambiguous = False
+            if idx_a in matched_a_to_b:
+                best_idx_b, best_score, best_rationale = matched_a_to_b[idx_a]
+                p_b = procs_b[best_idx_b]
+                evidence_links[self.report_b.report_id] = p_b.evidence
+                pids[self.report_b.report_id] = p_b.source_pid
+                commands[self.report_b.report_id] = p_b.command_line
 
-                if len(candidates) > 1 and (best_score - candidates[1][1]) < 0.15:
+                is_ambiguous = False
+                a_cands = candidates_by_a.get(idx_a, [])
+                if len(a_cands) > 1 and (best_score - a_cands[1][1]) < 0.15:
                     is_ambiguous = True
-                    for c_idx, c_score, c_rat in candidates[1:]:
+                    for c_idx, c_score, c_rat in a_cands[1:]:
                         alternatives.append({
                             "report_b_pid": procs_b[c_idx].source_pid,
                             "image": procs_b[c_idx].image_name,
@@ -293,21 +354,11 @@ class EvidenceComparator:
 
                 if best_score >= 0.80 and not is_ambiguous:
                     confidence = ProcessMatchConfidence.MATCHED
-                    matched_b_indices.add(best_idx_b)
-                    p_b = procs_b[best_idx_b]
-                    evidence_links[self.report_b.report_id] = p_b.evidence
-                    pids[self.report_b.report_id] = p_b.source_pid
-                    commands[self.report_b.report_id] = p_b.command_line
                     obs_presence = ObservationPresence.OBSERVED_IN_BOTH
                     causal = CausalExplanation.CORROBORATED_EXECUTION
                     interpretation = f"Corroborated across runs (PID A={p_a.source_pid}, PID B={p_b.source_pid})."
                 else:
                     confidence = ProcessMatchConfidence.POSSIBLE_MATCH
-                    matched_b_indices.add(best_idx_b)
-                    p_b = procs_b[best_idx_b]
-                    evidence_links[self.report_b.report_id] = p_b.evidence
-                    pids[self.report_b.report_id] = p_b.source_pid
-                    commands[self.report_b.report_id] = p_b.command_line
                     obs_presence = ObservationPresence.OBSERVED_IN_BOTH
                     causal = CausalExplanation.CORROBORATED_EXECUTION
                     interpretation = "Plausible candidate alignment with potential ambiguity across candidate nodes."
@@ -345,7 +396,7 @@ class EvidenceComparator:
                 )
             )
 
-        # Handle leftover processes in Report B
+        # Step 4: Handle leftover processes in Report B
         for idx_b, p_b in enumerate(procs_b):
             if idx_b in matched_b_indices:
                 continue
@@ -358,7 +409,7 @@ class EvidenceComparator:
                     event_summary=f"Process '{p_b.image_name}' unrecorded in Report A",
                     raw_snippet={},
                     is_available=False,
-                    missing_reason=f"No matching execution node in Report A"
+                    missing_reason="No matching execution node in Report A"
                 )
             }
             results.append(
@@ -374,7 +425,8 @@ class EvidenceComparator:
                     epistemic_interpretation=f"Observed only in Report B (PID {p_b.source_pid}).",
                     pids_by_report={self.report_b.report_id: p_b.source_pid},
                     commands_by_report={self.report_b.report_id: p_b.command_line},
-                    evidence_links=evidence_links
+                    evidence_links=evidence_links,
+                    alternative_candidates=[]
                 )
             )
 
@@ -382,92 +434,106 @@ class EvidenceComparator:
 
     def _reconcile_network(self) -> List[ReconciledNetworkItem]:
         results: List[ReconciledNetworkItem] = []
-        net_a: Dict[str, NetworkObservation] = {n.connection_key: n for n in self.report_a.network_events}
-        net_b: Dict[str, NetworkObservation] = {n.connection_key: n for n in self.report_b.network_events}
+        net_a_by_key: Dict[str, List[NetworkObservation]] = {}
+        for n in self.report_a.network_events:
+            net_a_by_key.setdefault(n.connection_key, []).append(n)
 
-        all_keys = sorted(list(set(net_a.keys()) | set(net_b.keys())))
+        net_b_by_key: Dict[str, List[NetworkObservation]] = {}
+        for n in self.report_b.network_events:
+            net_b_by_key.setdefault(n.connection_key, []).append(n)
+
+        all_keys = sorted(list(set(net_a_by_key.keys()) | set(net_b_by_key.keys())))
 
         for key in all_keys:
-            na = net_a.get(key)
-            nb = net_b.get(key)
+            list_a = net_a_by_key.get(key, [])
+            list_b = net_b_by_key.get(key, [])
 
-            evidence_links: Dict[str, EvidencePointer] = {}
-            observed_in: List[str] = []
-            unobserved_in: List[str] = []
-            policy_rec: Optional[str] = None
-            policy_ptr: Optional[EvidencePointer] = None
-            cross_corr = "UNLINKED"
-            causal_stat = "UNKNOWN"
-            conn_state = "UNKNOWN"
+            max_len = max(len(list_a), len(list_b))
+            for i in range(max_len):
+                na = list_a[i] if i < len(list_a) else None
+                nb = list_b[i] if i < len(list_b) else None
 
-            if na and nb:
-                obs_presence = ObservationPresence.OBSERVED_IN_BOTH
-                causal = CausalExplanation.CORROBORATED_EXECUTION
-                cross_corr = "DIRECT_IDENTIFIER_MATCH"
-                causal_stat = "CONFIRMED"
-                conn_state = "ESTABLISHED"
-                observed_in.extend([self.report_a.report_id, self.report_b.report_id])
-                evidence_links[self.report_a.report_id] = na.evidence
-                evidence_links[self.report_b.report_id] = nb.evidence
-                interpretation = f"Socket observation '{key}' corroborated across both reports."
+                evidence_links: Dict[str, EvidencePointer] = {}
+                observed_in: List[str] = []
+                unobserved_in: List[str] = []
+                policy_rec: Optional[str] = None
+                policy_ptr: Optional[EvidencePointer] = None
+                cross_corr = "UNLINKED"
+                causal_stat = "UNKNOWN"
+                conn_state = "UNKNOWN"
 
-            elif na and not nb:
-                obs_presence = ObservationPresence.OBSERVED_ONLY_IN_A
-                observed_in.append(self.report_a.report_id)
-                unobserved_in.append(self.report_b.report_id)
-                evidence_links[self.report_a.report_id] = na.evidence
+                if na and nb:
+                    obs_presence = ObservationPresence.OBSERVED_IN_BOTH
+                    causal = CausalExplanation.CORROBORATED_EXECUTION
+                    cross_corr = "DIRECT_IDENTIFIER_MATCH"
+                    causal_stat = "CORROBORATED_SOCKET"
+                    conn_state = "SOCKET_RECORD_LOGGED"
+                    observed_in.extend([self.report_a.report_id, self.report_b.report_id])
+                    evidence_links[self.report_a.report_id] = na.evidence
+                    evidence_links[self.report_b.report_id] = nb.evidence
+                    interpretation = (
+                        f"Socket observation '{key}' corroborated across both reports. "
+                        f"Telemetry confirms both environments logged socket activity; does not establish "
+                        f"full application-layer handshake completion or identical payload transmission without packet-level capture."
+                    )
 
-                causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
-                    self._evaluate_network_causality(na, self.report_b)
+                elif na and not nb:
+                    obs_presence = ObservationPresence.OBSERVED_ONLY_IN_A
+                    observed_in.append(self.report_a.report_id)
+                    unobserved_in.append(self.report_b.report_id)
+                    evidence_links[self.report_a.report_id] = na.evidence
+
+                    causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
+                        self._evaluate_network_causality(na, self.report_b)
+                    )
+
+                    evidence_links[self.report_b.report_id] = EvidencePointer(
+                        report_id=self.report_b.report_id,
+                        json_pointer="",
+                        event_summary=f"Connection {key} unrecorded in Report B",
+                        raw_snippet={},
+                        is_available=False,
+                        missing_reason=policy_rec or interpretation
+                    )
+
+                else:
+                    assert nb is not None
+                    obs_presence = ObservationPresence.OBSERVED_ONLY_IN_B
+                    observed_in.append(self.report_b.report_id)
+                    unobserved_in.append(self.report_a.report_id)
+                    evidence_links[self.report_b.report_id] = nb.evidence
+
+                    causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
+                        self._evaluate_network_causality(nb, self.report_a)
+                    )
+
+                    evidence_links[self.report_a.report_id] = EvidencePointer(
+                        report_id=self.report_a.report_id,
+                        json_pointer="",
+                        event_summary=f"Connection {key} unrecorded in Report A",
+                        raw_snippet={},
+                        is_available=False,
+                        missing_reason=policy_rec or interpretation
+                    )
+
+                results.append(
+                    ReconciledNetworkItem(
+                        connection_key=key,
+                        observation_presence=obs_presence,
+                        observation_type="TELEMETRY_LOGGED_SOCKET_RECORD",
+                        connection_state=conn_state,
+                        policy_decision=policy_rec,
+                        cross_report_correlation=cross_corr,
+                        causal_status=causal_stat,
+                        causal_explanation=causal,
+                        policy_decision_record=policy_rec,
+                        policy_decision_evidence=policy_ptr,
+                        observed_in_reports=observed_in,
+                        unobserved_in_reports=unobserved_in,
+                        evidence_links=evidence_links,
+                        epistemic_interpretation=interpretation
+                    )
                 )
-
-                evidence_links[self.report_b.report_id] = EvidencePointer(
-                    report_id=self.report_b.report_id,
-                    json_pointer="",
-                    event_summary=f"Connection {key} unrecorded in Report B",
-                    raw_snippet={},
-                    is_available=False,
-                    missing_reason=policy_rec or interpretation
-                )
-
-            else:
-                assert nb is not None
-                obs_presence = ObservationPresence.OBSERVED_ONLY_IN_B
-                observed_in.append(self.report_b.report_id)
-                unobserved_in.append(self.report_a.report_id)
-                evidence_links[self.report_b.report_id] = nb.evidence
-
-                causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
-                    self._evaluate_network_causality(nb, self.report_a)
-                )
-
-                evidence_links[self.report_a.report_id] = EvidencePointer(
-                    report_id=self.report_a.report_id,
-                    json_pointer="",
-                    event_summary=f"Connection {key} unrecorded in Report A",
-                    raw_snippet={},
-                    is_available=False,
-                    missing_reason=policy_rec or interpretation
-                )
-
-            results.append(
-                ReconciledNetworkItem(
-                    connection_key=key,
-                    observation_presence=obs_presence,
-                    observation_type="TELEMETRY_LOGGED_SOCKET_RECORD",
-                    connection_state=conn_state,
-                    policy_decision=policy_rec,
-                    cross_report_correlation=cross_corr,
-                    causal_status=causal_stat,
-                    causal_explanation=causal,
-                    policy_decision_record=policy_rec,
-                    policy_decision_evidence=policy_ptr,
-                    observed_in_reports=observed_in,
-                    unobserved_in_reports=unobserved_in,
-                    evidence_links=evidence_links,
-                    epistemic_interpretation=interpretation
-                )
-            )
 
         return results
 

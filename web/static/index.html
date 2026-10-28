@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evidence-Aware Sandbox Comparator | Offline-First Forensic Diff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #070a12;
+      --bg-secondary: #0d1322;
+      --bg-card: #121a2f;
+      --bg-hover: #1b2541;
+      --border-color: #1e2c4a;
+      --border-light: #2d3f66;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --emerald: #10b981;
+      --emerald-bg: rgba(16, 185, 129, 0.12);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.12);
+      --rose: #f43f5e;
+      --rose-bg: rgba(244, 63, 94, 0.12);
+      --blue: #38bdf8;
+      --blue-bg: rgba(56, 189, 248, 0.12);
+      --purple: #a855f7;
+      --purple-bg: rgba(168, 85, 247, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      line-height: 1.5;
+      font-size: 13.5px;
+      overflow-x: hidden;
+    }
+
+    code, pre, .mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+    }
+
+    /* Layout Header */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #10b981, #06b6d4);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #070a12;
+      font-size: 14px;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-tag {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-offline {
+      background: var(--emerald-bg);
+      color: var(--emerald);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge-offline::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--emerald);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Controls Bar */
+    .controls-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .preset-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      color: var(--text-main);
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--blue);
+    }
+    .btn-active {
+      background: var(--blue-bg);
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+    .btn-primary {
+      background: #10b981;
+      border-color: #10b981;
+      color: #070a12;
+      font-weight: 700;
+    }
+    .btn-primary:hover {
+      background: #059669;
+      border-color: #059669;
+    }
+
+    /* Upload zone */
+    .upload-inline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+    .file-input-wrapper input[type=file] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+
+    /* Metric Cards Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .metric-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    .metric-title {
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .metric-val {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .metric-sub {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    /* Provenance Target Banner */
+    .target-banner {
+      background: var(--bg-secondary);
+      border-left: 3px solid var(--blue);
+      border-top: 1px solid var(--border-color);
+      border-right: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px 18px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .target-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .target-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .target-data {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--blue);
+    }
+
+    /* Tabs */
+    .tabs-header {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 16px;
+      gap: 6px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab-btn:hover {
+      color: var(--text-main);
+    }
+    .tab-btn.active {
+      color: #38bdf8;
+    }
+    .tab-btn.active::after {
+      content: "";
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #38bdf8;
+    }
+
+    .tab-counter {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Table Styles */
+    .table-container {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-card);
+      color: var(--text-dim);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 10px 16px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 11px 16px;
+      border-bottom: 1px solid rgba(30, 44, 74, 0.4);
+      color: var(--text-main);
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background: rgba(27, 37, 65, 0.4);
+    }
+
+    /* Pill Badges */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+
+    .pill-green { background: var(--emerald-bg); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .pill-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .pill-rose { background: var(--rose-bg); color: var(--rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+    .pill-blue { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .pill-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(168, 85, 247, 0.3); }
+
+    .score-meter {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .meter-bar {
+      width: 48px;
+      height: 6px;
+      background: var(--bg-card);
+      border-radius: 3px;
+      overflow: hidden;
+      display: inline-block;
+    }
+    .meter-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--emerald);
+    }
+
+    .pointer-link {
+      color: var(--blue);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .pointer-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Drawer Modal */
+    .drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(2px);
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .drawer-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: -580px;
+      width: 560px;
+      height: 100vh;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border-light);
+      z-index: 51;
+      transition: right 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+    }
+    .drawer.open {
+      right: 0;
+    }
+
+    .drawer-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .drawer-title {
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .drawer-close {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .drawer-close:hover { color: var(--text-main); }
+
+    .drawer-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .drawer-section {
+      margin-bottom: 20px;
+    }
+    .drawer-section-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .snippet-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      max-height: 280px;
+    }
+
+    .epistemic-callout {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 3px solid #38bdf8;
+      padding: 10px 14px;
+      border-radius: 4px;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: var(--text-main);
+    }
+
+    /* Empty & Loading states */
+    .loading-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .footer {
+      text-align: center;
+      padding: 30px 0;
+      color: var(--text-dim);
+      font-size: 12px;
+      border-top: 1px solid var(--border-color);
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- App Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">SC</div>
+      <div>
+        <div class="brand-title">Sandbox Comparator</div>
+      </div>
+      <div class="brand-tag">v1.0 Local-First MVP</div>
+    </div>
+    <div class="header-badges">
+      <div class="badge-offline">100% Offline & Local</div>
+      <div class="brand-tag">Zero Telemetry Uploaded</div>
+      <button class="btn btn-primary" onclick="exportMarkdown()">Export Report (.md)</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Controls Panel -->
+    <div class="controls-panel">
+      <div class="preset-group">
+        <span style="font-size: 12px; font-weight: 600; color: var(--text-dim);">DEMO PRESETS:</span>
+        <button id="btn-preset-y" class="btn btn-active" onclick="loadPreset('scenario_y')">
+          Scenario Y: Cross-Vendor (CAPE v2.4 vs Falcon Cloud)
+        </button>
+        <button id="btn-preset-x" class="btn" onclick="loadPreset('scenario_x')">
+          Scenario X: Repeated Run (CAPE Run 1 vs Run 2)
+        </button>
+      </div>
+
+      <div class="upload-inline">
+        <span style="font-size: 12px; font-weight: 600; color: var(--text-dim);">CUSTOM RUN:</span>
+        <div class="file-input-wrapper">
+          <button class="btn">Upload 2 Reports...</button>
+          <input type="file" id="file-uploader" multiple accept=".json" onchange="handleFileUpload(event)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Target Provenance Banner -->
+    <div class="target-banner" id="target-banner">
+      <div class="target-item">
+        <span class="target-label">Target Sample SHA-256</span>
+        <span class="target-data" id="banner-sha256">Loading...</span>
+      </div>
+      <div class="target-item">
+        <span class="target-label">Report A Ingestion</span>
+        <span class="target-data" id="banner-report-a">--</span>
+      </div>
+      <div class="target-item">
+        <span class="target-label">Report B Ingestion</span>
+        <span class="target-data" id="banner-report-b">--</span>
+      </div>
+      <div class="target-item">
+        <span class="target-label">Reconciliation Algorithm</span>
+        <span class="target-data" style="color: var(--emerald);">Bipartite Global Assignment (Munkres)</span>
+      </div>
+    </div>
+
+    <!-- High-Density Metrics Grid -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-title">Processes Reconciled</div>
+        <div class="metric-val">
+          <span id="metric-procs-matched" style="color: var(--emerald);">0</span>
+          <span class="metric-sub">/ <span id="metric-procs-total">0</span> total</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-title">Dropped Files Corroborated</div>
+        <div class="metric-val">
+          <span id="metric-files-matched" style="color: var(--emerald);">0</span>
+          <span class="metric-sub">/ <span id="metric-files-total">0</span> total</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-title">Network Socket Corroboration</div>
+        <div class="metric-val">
+          <span id="metric-net-matched" style="color: var(--blue);">0</span>
+          <span class="metric-sub">sockets logged</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-title">Sandbox Policy & Limitations</div>
+        <div class="metric-val">
+          <span id="metric-lims" style="color: var(--amber);">0</span>
+          <span class="metric-sub">warnings detected</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="tabs-header">
+      <button class="tab-btn active" onclick="switchTab('tab-procs', this)">
+        Process Trees <span class="tab-counter" id="tab-cnt-procs">0</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-files', this)">
+        Dropped Artifacts <span class="tab-counter" id="tab-cnt-files">0</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-net', this)">
+        Network Telemetry <span class="tab-counter" id="tab-cnt-net">0</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-lims', this)">
+        Collection Limitations <span class="tab-counter" id="tab-cnt-lims">0</span>
+      </button>
+    </div>
+
+    <!-- Tab 1: Processes -->
+    <div id="tab-procs" class="tab-content">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Semantic Process Node</th>
+              <th>Presence</th>
+              <th>Confidence</th>
+              <th>Heuristic Similarity</th>
+              <th>PID A</th>
+              <th>PID B</th>
+              <th>RFC 6901 Evidence</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-procs">
+            <tr><td colspan="7" style="text-align:center; padding: 24px;">Loading comparison data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 2: Dropped Files -->
+    <div id="tab-files" class="tab-content" style="display:none;">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>SHA-256 Hash</th>
+              <th>Presence</th>
+              <th>Causal Explanation</th>
+              <th>Filename in A</th>
+              <th>Filename in B</th>
+              <th>RFC 6901 Evidence</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-files">
+            <tr><td colspan="6" style="text-align:center; padding: 24px;">Loading files...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 3: Network -->
+    <div id="tab-net" class="tab-content" style="display:none;">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Connection Key</th>
+              <th>Socket State</th>
+              <th>Presence</th>
+              <th>Causal Status</th>
+              <th>Policy Record / Limitation</th>
+              <th>RFC 6901 Evidence</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-net">
+            <tr><td colspan="6" style="text-align:center; padding: 24px;">Loading network...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 4: Limitations -->
+    <div id="tab-lims" class="tab-content" style="display:none;">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Reporting Sandbox</th>
+              <th>Warning Code</th>
+              <th>Category</th>
+              <th>Description</th>
+              <th>Target Pattern</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-lims">
+            <tr><td colspan="5" style="text-align:center; padding: 24px;">Loading limitations...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer">
+      Evidence-Aware Sandbox Comparator &bull; Milestone 5 to Production MVP &bull; Preserving Epistemic Integrity and Traceability
+    </div>
+  </div>
+
+  <!-- Evidence Inspector Drawer -->
+  <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-title">RFC 6901 Evidence Inspector</div>
+      <button class="drawer-close" onclick="closeDrawer()">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <div class="drawer-section">
+        <div class="drawer-section-title">JSON Pointer URI</div>
+        <div class="mono" id="drawer-pointer" style="color: var(--blue); font-size: 13px; font-weight:600;">--</div>
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section-title">Telemetry Summary</div>
+        <div id="drawer-summary" style="font-size: 13px; font-weight:500;">--</div>
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section-title">Epistemic Interpretation & Truth Boundary</div>
+        <div class="epistemic-callout" id="drawer-epistemic">--</div>
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section-title">Raw Source Telemetry Snippet</div>
+        <pre class="snippet-box" id="drawer-snippet">// Raw JSON snippet</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentComparison = null;
+
+    async function loadPreset(presetId) {
+      document.getElementById('btn-preset-y').classList.toggle('btn-active', presetId === 'scenario_y');
+      document.getElementById('btn-preset-x').classList.toggle('btn-active', presetId === 'scenario_x');
+
+      try {
+        const res = await fetch('/api/compare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preset_id: presetId })
+        });
+        const data = await res.json();
+        renderComparison(data);
+      } catch (err) {
+        alert("Failed to load preset: " + err);
+      }
+    }
+
+    async function handleFileUpload(e) {
+      const files = e.target.files;
+      if (files.length < 2) {
+        alert("Please select at least two JSON report files to compare.");
+        return;
+      }
+      try {
+        const textA = await files[0].text();
+        const textB = await files[1].text();
+        const jsonA = JSON.parse(textA);
+        const jsonB = JSON.parse(textB);
+
+        const res = await fetch('/api/compare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            report_a_raw: jsonA,
+            report_b_raw: jsonB,
+            report_a_name: files[0].name.replace(/\.[^/.]+$/, ""),
+            report_b_name: files[1].name.replace(/\.[^/.]+$/, "")
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert("Error: " + (err.detail || "Comparison failed"));
+          return;
+        }
+        const data = await res.json();
+        renderComparison(data);
+      } catch (err) {
+        alert("Failed to parse or compare JSON files: " + err);
+      }
+    }
+
+    function renderComparison(data) {
+      currentComparison = data;
+
+      // Banner
+      document.getElementById('banner-sha256').textContent = data.sample_sha256 || 'Unknown';
+      const metaA = data.provenance_metadata[data.report_a_id] || {};
+      const metaB = data.provenance_metadata[data.report_b_id] || {};
+      document.getElementById('banner-report-a').textContent = `${data.report_a_id} (${metaA.sandbox || 'Generic'})`;
+      document.getElementById('banner-report-b').textContent = `${data.report_b_id} (${metaB.sandbox || 'Generic'})`;
+
+      // Metrics
+      document.getElementById('metric-procs-matched').textContent = data.metrics.matched_processes;
+      document.getElementById('metric-procs-total').textContent = data.reconciled_processes.length;
+      document.getElementById('metric-files-matched').textContent = data.metrics.matched_files;
+      document.getElementById('metric-files-total').textContent = data.reconciled_files.length;
+      document.getElementById('metric-net-matched').textContent = data.metrics.matched_network;
+      document.getElementById('metric-lims').textContent = data.metrics.total_limitations;
+
+      // Tab Counters
+      document.getElementById('tab-cnt-procs').textContent = data.reconciled_processes.length;
+      document.getElementById('tab-cnt-files').textContent = data.reconciled_files.length;
+      document.getElementById('tab-cnt-net').textContent = data.reconciled_network.length;
+      let totalLims = 0;
+      Object.values(data.collection_limitations).forEach(l => totalLims += l.length);
+      document.getElementById('tab-cnt-lims').textContent = totalLims;
+
+      // Render Processes
+      const tbodyProcs = document.getElementById('tbody-procs');
+      tbodyProcs.innerHTML = '';
+      data.reconciled_processes.forEach((p, idx) => {
+        const tr = document.createElement('tr');
+        const presencePill = p.observation_presence === 'OBSERVED_IN_BOTH' 
+          ? '<span class="pill pill-green">CORROBORATED</span>'
+          : '<span class="pill pill-rose">SINGLE REPORT</span>';
+        
+        const confPill = p.confidence === 'MATCHED'
+          ? '<span class="pill pill-green">MATCHED</span>'
+          : (p.confidence === 'POSSIBLE_MATCH' ? '<span class="pill pill-amber">AMBIGUOUS</span>' : '<span class="pill pill-rose">UNRESOLVED</span>');
+
+        const scorePct = Math.round(p.heuristic_similarity_score * 100);
+        const scoreColor = scorePct >= 80 ? 'var(--emerald)' : (scorePct >= 45 ? 'var(--amber)' : 'var(--text-dim)');
+
+        const pidA = p.pids[data.report_a_id] !== undefined ? p.pids[data.report_a_id] : '-';
+        const pidB = p.pids[data.report_b_id] !== undefined ? p.pids[data.report_b_id] : '-';
+
+        let ptrHtml = '';
+        Object.entries(p.evidence_pointers).forEach(([rep, ptr]) => {
+          if (ptr && ptr.is_available) {
+            ptrHtml += `<div><a class="pointer-link" onclick="inspectEvidence('${p.image_name}', '${ptr.json_pointer}', '${escapeHtml(ptr.event_summary)}', '${escapeHtml(p.epistemic_interpretation)}', ${escapeHtml(JSON.stringify(ptr.raw_snippet))})">&#128269; ${ptr.json_pointer}</a></div>`;
+          }
+        });
+
+        tr.innerHTML = `
+          <td>
+            <div style="font-weight:600;">${escapeHtml(p.image_name)}</div>
+            <div class="mono" style="font-size: 11px; color: var(--text-dim);">${escapeHtml(p.lineage_path.join(' &rarr; '))}</div>
+          </td>
+          <td>${presencePill}</td>
+          <td>${confPill}</td>
+          <td>
+            <div class="score-meter">
+              <span style="color:${scoreColor}">${scorePct}%</span>
+              <div class="meter-bar"><div class="meter-fill" style="width:${scorePct}%; background:${scoreColor};"></div></div>
+            </div>
+          </td>
+          <td class="mono">${pidA}</td>
+          <td class="mono">${pidB}</td>
+          <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
+        `;
+        tbodyProcs.appendChild(tr);
+      });
+
+      // Render Files
+      const tbodyFiles = document.getElementById('tbody-files');
+      tbodyFiles.innerHTML = '';
+      data.reconciled_files.forEach(f => {
+        const tr = document.createElement('tr');
+        const presencePill = f.observation_presence === 'OBSERVED_IN_BOTH'
+          ? '<span class="pill pill-green">CORROBORATED</span>'
+          : '<span class="pill pill-rose">SINGLE REPORT</span>';
+
+        const nameA = f.filenames[data.report_a_id] || '<span style="color:var(--text-dim)">(none)</span>';
+        const nameB = f.filenames[data.report_b_id] || '<span style="color:var(--text-dim)">(none)</span>';
+
+        let ptrHtml = '';
+        Object.entries(f.evidence_pointers).forEach(([rep, ptr]) => {
+          if (ptr && ptr.is_available) {
+            ptrHtml += `<div><a class="pointer-link" onclick="inspectEvidence('${f.sha256.substring(0, 16)}', '${ptr.json_pointer}', '${escapeHtml(ptr.event_summary)}', '${escapeHtml(f.epistemic_interpretation)}', ${escapeHtml(JSON.stringify(ptr.raw_snippet))})">&#128269; ${ptr.json_pointer}</a></div>`;
+          }
+        });
+
+        tr.innerHTML = `
+          <td class="mono" style="font-size:12px;">${f.sha256.substring(0, 16)}...</td>
+          <td>${presencePill}</td>
+          <td><span class="pill pill-blue">${f.causal_explanation}</span></td>
+          <td>${nameA}</td>
+          <td>${nameB}</td>
+          <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
+        `;
+        tbodyFiles.appendChild(tr);
+      });
+
+      // Render Network
+      const tbodyNet = document.getElementById('tbody-net');
+      tbodyNet.innerHTML = '';
+      data.reconciled_network.forEach(n => {
+        const tr = document.createElement('tr');
+        const presencePill = n.observation_presence === 'OBSERVED_IN_BOTH'
+          ? '<span class="pill pill-green">OBSERVED IN BOTH</span>'
+          : '<span class="pill pill-rose">OBSERVED IN ONE</span>';
+
+        const statePill = `<span class="pill pill-purple">${n.connection_state}</span>`;
+        const causalPill = `<span class="pill pill-blue">${n.causal_status}</span>`;
+
+        let ptrHtml = '';
+        Object.entries(n.evidence_pointers).forEach(([rep, ptr]) => {
+          if (ptr && ptr.is_available) {
+            ptrHtml += `<div><a class="pointer-link" onclick="inspectEvidence('${n.connection}', '${ptr.json_pointer}', '${escapeHtml(ptr.event_summary)}', '${escapeHtml(n.epistemic_interpretation)}', ${escapeHtml(JSON.stringify(ptr.raw_snippet))})">&#128269; ${ptr.json_pointer}</a></div>`;
+          }
+        });
+
+        tr.innerHTML = `
+          <td class="mono" style="font-weight:600; color: var(--blue);">${escapeHtml(n.connection)}</td>
+          <td>${statePill}</td>
+          <td>${presencePill}</td>
+          <td>${causalPill}</td>
+          <td style="font-size:12px;">${n.policy_record ? '<span class="pill pill-amber">' + escapeHtml(n.policy_record) + '</span>' : '<span style="color:var(--text-dim)">(None)</span>'}</td>
+          <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
+        `;
+        tbodyNet.appendChild(tr);
+      });
+
+      // Render Limitations
+      const tbodyLims = document.getElementById('tbody-lims');
+      tbodyLims.innerHTML = '';
+      Object.entries(data.collection_limitations).forEach(([rep, lims]) => {
+        lims.forEach(l => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="mono" style="font-weight:600;">${rep}</td>
+            <td><span class="pill pill-amber">${escapeHtml(l.code)}</span></td>
+            <td><span class="pill pill-purple">${escapeHtml(l.category)}</span></td>
+            <td>${escapeHtml(l.description)}</td>
+            <td class="mono">${escapeHtml(l.target_pattern || 'None')}</td>
+          `;
+          tbodyLims.appendChild(tr);
+        });
+      });
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).style.display = 'block';
+      btn.classList.add('active');
+    }
+
+    function inspectEvidence(title, pointer, summary, epistemic, rawSnippet) {
+      document.getElementById('drawer-pointer').textContent = `rfc6901://${pointer}`;
+      document.getElementById('drawer-summary').textContent = summary;
+      document.getElementById('drawer-epistemic').textContent = epistemic;
+      try {
+        const obj = typeof rawSnippet === 'string' ? JSON.parse(rawSnippet) : rawSnippet;
+        document.getElementById('drawer-snippet').textContent = JSON.stringify(obj, null, 2);
+      } catch (e) {
+        document.getElementById('drawer-snippet').textContent = String(rawSnippet);
+      }
+      document.getElementById('drawer-overlay').classList.add('open');
+      document.getElementById('drawer').classList.add('open');
+    }
+
+    function closeDrawer() {
+      document.getElementById('drawer-overlay').classList.remove('open');
+      document.getElementById('drawer').classList.remove('open');
+    }
+
+    function exportMarkdown() {
+      if (!currentComparison || !currentComparison.markdown_report) {
+        alert("No comparison data available to export.");
+        return;
+      }
+      const blob = new Blob([currentComparison.markdown_report], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sandbox_comparison_${currentComparison.sample_sha256.substring(0, 12)}.md`;
+      a.click();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Auto-load default scenario on start
+    window.addEventListener('DOMContentLoaded', () => {
+      loadPreset('scenario_y');
+    });
+  </script>
+</body>
+</html>

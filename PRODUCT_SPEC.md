@@ -95,11 +95,13 @@ Sandbox Comparator is offered under a transparent, utility-grounded licensing mo
 +----------------------------------------------------------------------------------------------------+
 ```
 
-### Compliance & Regulatory Posture
-Because Sandbox Comparator processes reports exclusively within the customer's local execution environment, organizations can deploy it without triggering data-transfer restrictions under:
-- **GDPR Article 44** (No cross-border transfers of personal or threat data).
-- **HIPAA Security Rule § 164.312** (Zero external exposure of electronic Protected Health Information embedded in incident logs).
-- **SOC 2 Type II** (Customer data never leaves tenant-controlled boundaries).
+### Privacy & Regulatory Design Considerations
+*Disclaimer: Sandbox Comparator is an independent software tool. The following points represent architectural privacy design principles rather than formal regulatory certification or compliance attestation.*
+
+By processing telemetry exclusively within the customer's local execution boundary (`127.0.0.1`) without egress to external servers, the local-first architecture is designed to support teams in meeting common internal security objectives:
+- **Data Residency & Cross-Border Principles (e.g., GDPR Art. 44 design alignment)**: Local execution avoids transferring incident evidence, IP addresses, or potential PII to third-party multi-engine cloud providers.
+- **Sensitive Data Isolation (e.g., HIPAA § 164.312 considerations)**: Eliminates external transmission of electronic data contained in dynamic sandbox traces.
+- **Customer Control Boundary (e.g., SOC 2 Security Principles)**: Incident telemetry remains entirely within customer-controlled infrastructure; no vendor-side multi-tenant databases or logs are maintained.
 
 ---
 
@@ -125,3 +127,4 @@ Because Sandbox Comparator processes reports exclusively within the customer's l
 - **Product Launch (Phase 1, Days 1–14)**: Publish standalone repository, distribute screen-only interactive demo, and initiate Phase 1 practitioner interviews.
 - **Usability Expansion (Phase 2, Days 15–35)**: Expand schema parser pack to Any.Run and Joe Sandbox; integrate memory-safe streaming JSON parser.
 - **Commercial Monetization (Phase 3–4, Days 36–90)**: Deploy Razorpay Subscriptions for Indian and international early adopters; offer initial Pro licenses to active trial participants.
+
