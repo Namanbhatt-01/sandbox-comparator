@@ -216,6 +216,32 @@ class TestFuzzingAndSecurity(unittest.TestCase):
         )
         self.assertIn("PASS: Browser-level DOM security suite verified", res.stdout)
 
+    def test_cape_duplicate_pid_detection(self):
+        """
+        Verify that duplicate process IDs in CAPE reports are explicitly flagged
+        with parser warnings and do not silently corrupt earlier process lineage.
+        """
+        raw_cape = {
+            "info": {"id": 1, "duration": 45},
+            "target": {"file": {"sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}},
+            "behavior": {
+                "processes": [
+                    {"process_id": 1000, "process_name": "parent.exe", "command_line": "parent.exe", "parent_id": None},
+                    {"process_id": 2000, "process_name": "child1.exe", "command_line": "child1.exe", "parent_id": 1000},
+                    # Duplicate PID 2000 reusing PID
+                    {"process_id": 2000, "process_name": "reused_pid.exe", "command_line": "reused_pid.exe", "parent_id": 1000},
+                ]
+            }
+        }
+        report = parse_cape_report(raw_cape, report_id="dup_pid_test")
+        self.assertIsNotNone(report)
+        self.assertEqual(len(report.processes), 3)
+
+        # Warning must be issued
+        dup_warns = [w for w in report.parser_warnings if "Duplicate process_id 2000" in w]
+        self.assertEqual(len(dup_warns), 1)
+        self.assertIn("Process lineage resolution preserves first seen record", dup_warns[0])
+
 
 if __name__ == "__main__":
     unittest.main()

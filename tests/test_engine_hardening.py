@@ -10,10 +10,13 @@ Validates:
 
 import unittest
 from engine.models import (
+    CausalExplanation,
     DroppedFileObservation,
     EvidencePointer,
     NetworkObservation,
     NormalizedReport,
+    ObservationPresence,
+    ProcessMatchConfidence,
     ProcessObservation,
 )
 from engine.parsers import detect_schema, parse_auto_report
@@ -91,7 +94,7 @@ class TestEngineHardening(unittest.TestCase):
 
     def test_process_matching_order_independence(self):
         """
-        Verify that candidate processes are matched based on global maximum similarity,
+        Verify that candidate processes are matched based on greedy score sorting (anchor-preserving matching),
         not order of appearance in Report A.
         """
         # p_a0 has weak similarity with p_b0; p_a1 has high similarity with p_b0
@@ -343,6 +346,83 @@ class TestEngineHardening(unittest.TestCase):
                 perm_pairs,
                 f"Permutation {i} resulted in divergent process assignment! Expected {base_pairs}, got {perm_pairs}"
             )
+
+    def test_missing_and_malformed_hashes_never_paired_as_identical(self):
+        """
+        Verify that files with missing, empty, or malformed hashes are NEVER grouped together
+        by empty string or matched as CORROBORATED_EXECUTION.
+        """
+        f_a1 = DroppedFileObservation("rep_a", "", "C:\\temp\\temp1.tmp", "temp1.tmp", 1024, "tmp", self.dummy_pointer, is_malformed_hash=True)
+        f_a2 = DroppedFileObservation("rep_a", "not_a_valid_sha256", "C:\\bin\\tool.bin", "tool.bin", 2048, "bin", self.dummy_pointer, is_malformed_hash=True)
+        
+        f_b1 = DroppedFileObservation("rep_b", "", "C:\\desktop\\ransom.txt", "ransom.txt", 4096, "txt", self.dummy_pointer, is_malformed_hash=True)
+        f_b2 = DroppedFileObservation("rep_b", "different_invalid_hash", "C:\\drivers\\driver.sys", "driver.sys", 8192, "sys", self.dummy_pointer, is_malformed_hash=True)
+
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, dropped_files=[f_a1, f_a2])
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, dropped_files=[f_b1, f_b2])
+
+        res = EvidenceComparator(rep_a, rep_b).reconcile()
+
+        # None of these 4 files should ever be paired as OBSERVED_IN_BOTH
+        for f in res.reconciled_files:
+            self.assertNotEqual(f.observation_presence, ObservationPresence.OBSERVED_IN_BOTH)
+            self.assertNotEqual(f.causal_explanation, CausalExplanation.CORROBORATED_EXECUTION)
+            self.assertTrue(f.is_malformed_hash)
+
+        # 2 files in A, 2 files in B -> all 4 must remain uncorroborated single-sided observations
+        obs_a = [f for f in res.reconciled_files if f.observation_presence == ObservationPresence.OBSERVED_ONLY_IN_A]
+        obs_b = [f for f in res.reconciled_files if f.observation_presence == ObservationPresence.OBSERVED_ONLY_IN_B]
+        self.assertEqual(len(obs_a), 2)
+        self.assertEqual(len(obs_b), 2)
+
+    def test_unrelated_root_processes_with_empty_cli_do_not_match(self):
+        """
+        Verify that two completely unrelated root processes with different executable names
+        and empty command lines do NOT receive similarity bonuses for absence of evidence.
+        Score must be <= 0.10 (well below tau = 0.45), preventing false candidate matching.
+        """
+        p_a = ProcessObservation("rep_a", 1001, None, "notepad.exe", "", ["notepad.exe"], 0, self.dummy_pointer)
+        p_b = ProcessObservation("rep_b", 2002, None, "calc.exe", "", ["calc.exe"], 0, self.dummy_pointer)
+
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, processes=[p_a])
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, processes=[p_b])
+
+        comp = EvidenceComparator(rep_a, rep_b)
+        score, rationale = comp._score_process_pair(p_a, p_b)
+
+        # Only identical tree depth (0.10) can apply; no argument or ancestry similarity bonus
+        self.assertLessEqual(score, 0.10)
+        self.assertLess(score, 0.45)
+
+        res = comp.reconcile()
+        # Both processes must remain single-sided
+        self.assertEqual(len(res.reconciled_processes), 2)
+        for p in res.reconciled_processes:
+            self.assertNotEqual(p.observation_presence, ObservationPresence.OBSERVED_IN_BOTH)
+            self.assertEqual(p.confidence, ProcessMatchConfidence.UNRESOLVED)
+
+    def test_aggregate_network_endpoints_structured_fields(self):
+        """
+        Verify that repeated network streams without distinct discriminators receive
+        causal_status = 'AGGREGATE_ENDPOINT_CORROBORATION' and causal_explanation = UNEXPLAINED
+        in downstream structured fields, preventing false claims of 1-to-1 socket bijection.
+        """
+        n_a1 = NetworkObservation("rep_a", "TCP", "203.0.113.5", 443, self.dummy_pointer)
+        n_a2 = NetworkObservation("rep_a", "TCP", "203.0.113.5", 443, self.dummy_pointer)
+        n_b1 = NetworkObservation("rep_b", "TCP", "203.0.113.5", 443, self.dummy_pointer)
+        n_b2 = NetworkObservation("rep_b", "TCP", "203.0.113.5", 443, self.dummy_pointer)
+
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, network_events=[n_a1, n_a2])
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, network_events=[n_b1, n_b2])
+
+        res = EvidenceComparator(rep_a, rep_b).reconcile()
+
+        # Both paired items must reflect aggregate endpoint corroboration without 1-to-1 socket claim
+        for n in res.reconciled_network:
+            self.assertEqual(n.cross_report_correlation, "AGGREGATE_ENDPOINT_CORROBORATION")
+            self.assertEqual(n.causal_status, "AGGREGATE_ENDPOINT_CORROBORATION")
+            self.assertEqual(n.causal_explanation, CausalExplanation.UNEXPLAINED)
+            self.assertIn("Specific stream-to-stream bijection is unestablished", n.epistemic_interpretation)
 
 
 if __name__ == "__main__":

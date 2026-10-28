@@ -157,7 +157,14 @@ pub fn parse_cape_report(raw: &Value, report_id: &str) -> NormalizedReport {
                     pid_val.as_str().and_then(|s| s.parse::<u32>().ok())
                 });
                 if let Some(pid) = pid_u32 {
-                    pid_to_proc.insert(pid, p);
+                    if let std::collections::hash_map::Entry::Vacant(e) = pid_to_proc.entry(pid) {
+                        e.insert(p);
+                    } else {
+                        norm_report.parser_warnings.push(format!(
+                            "Duplicate process_id {} detected in CAPE process telemetry. Process lineage resolution preserves first seen record; subsequent instances may indicate PID reuse.",
+                            pid
+                        ));
+                    }
                 } else {
                     norm_report
                         .parser_warnings

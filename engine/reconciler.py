@@ -95,16 +95,32 @@ class EvidenceComparator:
             }
         )
 
+    @staticmethod
+    def _is_valid_sha256(h: Optional[str]) -> bool:
+        if not h or not isinstance(h, str):
+            return False
+        h_clean = h.strip()
+        return len(h_clean) == 64 and all(c in "0123456789abcdefABCDEF" for c in h_clean)
+
     def _reconcile_files(self) -> List[ReconciledFileItem]:
         results: List[ReconciledFileItem] = []
         files_a_by_hash: Dict[str, List[DroppedFileObservation]] = {}
+        unhashed_a: List[DroppedFileObservation] = []
         for f in self.report_a.dropped_files:
-            files_a_by_hash.setdefault(f.sha256, []).append(f)
+            if self._is_valid_sha256(f.sha256) and not f.is_malformed_hash:
+                files_a_by_hash.setdefault(f.sha256.lower().strip(), []).append(f)
+            else:
+                unhashed_a.append(f)
 
         files_b_by_hash: Dict[str, List[DroppedFileObservation]] = {}
+        unhashed_b: List[DroppedFileObservation] = []
         for f in self.report_b.dropped_files:
-            files_b_by_hash.setdefault(f.sha256, []).append(f)
+            if self._is_valid_sha256(f.sha256) and not f.is_malformed_hash:
+                files_b_by_hash.setdefault(f.sha256.lower().strip(), []).append(f)
+            else:
+                unhashed_b.append(f)
 
+        # 1. Reconcile cryptographically valid hashes
         all_hashes = sorted(list(set(files_a_by_hash.keys()) | set(files_b_by_hash.keys())))
 
         for h in all_hashes:
@@ -225,6 +241,93 @@ class EvidenceComparator:
                     )
                 )
 
+        # 2. Reconcile unhashed or malformed-hash files (never group by empty hash!)
+        used_unhashed_b: Set[int] = set()
+        for fa in unhashed_a:
+            best_b_idx = None
+            for b_idx, fb in enumerate(unhashed_b):
+                if b_idx in used_unhashed_b:
+                    continue
+                if fa.file_path and fb.file_path and fa.file_path.strip().lower() == fb.file_path.strip().lower():
+                    best_b_idx = b_idx
+                    break
+
+            if best_b_idx is not None:
+                used_unhashed_b.add(best_b_idx)
+                fb = unhashed_b[best_b_idx]
+                results.append(
+                    ReconciledFileItem(
+                        sha256=fa.sha256 or fb.sha256 or "UNAVAILABLE_MISSING_HASH",
+                        observation_presence=ObservationPresence.OBSERVED_IN_BOTH,
+                        causal_explanation=CausalExplanation.UNEXPLAINED,
+                        filenames_by_report={self.report_a.report_id: fa.file_name, self.report_b.report_id: fb.file_name},
+                        file_paths_by_report={self.report_a.report_id: fa.file_path, self.report_b.report_id: fb.file_path},
+                        evidence_links={self.report_a.report_id: fa.evidence, self.report_b.report_id: fb.evidence},
+                        epistemic_interpretation=(
+                            f"Files share matching path '{fa.file_path}' across runs, but lack verified cryptographic SHA-256 hashes "
+                            f"(Report A: '{fa.sha256 or 'none'}', Report B: '{fb.sha256 or 'none'}'). "
+                            f"Content identity cannot be verified; payload corroboration remains unestablished."
+                        ),
+                        is_malformed_hash=True
+                    )
+                )
+            else:
+                results.append(
+                    ReconciledFileItem(
+                        sha256=fa.sha256 or "UNAVAILABLE_MISSING_HASH",
+                        observation_presence=ObservationPresence.OBSERVED_ONLY_IN_A,
+                        causal_explanation=self._evaluate_file_causality(self.report_b),
+                        filenames_by_report={self.report_a.report_id: fa.file_name},
+                        file_paths_by_report={self.report_a.report_id: fa.file_path},
+                        evidence_links={
+                            self.report_a.report_id: fa.evidence,
+                            self.report_b.report_id: EvidencePointer(
+                                report_id=self.report_b.report_id,
+                                json_pointer="",
+                                event_summary=f"Unhashed file '{fa.file_name}' unrecorded in Report B",
+                                raw_snippet={},
+                                is_available=False,
+                                missing_reason="File unrecorded or lacks valid hash in Report B"
+                            )
+                        },
+                        epistemic_interpretation=(
+                            f"Observed only in Report A ('{fa.file_name}'). "
+                            f"File lacks a verified SHA-256 hash (recorded: '{fa.sha256 or 'none'}'); "
+                            f"cannot correlate content across environments without cryptographic hash."
+                        ),
+                        is_malformed_hash=True
+                    )
+                )
+
+        for b_idx, fb in enumerate(unhashed_b):
+            if b_idx not in used_unhashed_b:
+                results.append(
+                    ReconciledFileItem(
+                        sha256=fb.sha256 or "UNAVAILABLE_MISSING_HASH",
+                        observation_presence=ObservationPresence.OBSERVED_ONLY_IN_B,
+                        causal_explanation=self._evaluate_file_causality(self.report_a),
+                        filenames_by_report={self.report_b.report_id: fb.file_name},
+                        file_paths_by_report={self.report_b.report_id: fb.file_path},
+                        evidence_links={
+                            self.report_b.report_id: fb.evidence,
+                            self.report_a.report_id: EvidencePointer(
+                                report_id=self.report_a.report_id,
+                                json_pointer="",
+                                event_summary=f"Unhashed file '{fb.file_name}' unrecorded in Report A",
+                                raw_snippet={},
+                                is_available=False,
+                                missing_reason="File unrecorded or lacks valid hash in Report A"
+                            )
+                        },
+                        epistemic_interpretation=(
+                            f"Observed only in Report B ('{fb.file_name}'). "
+                            f"File lacks a verified SHA-256 hash (recorded: '{fb.sha256 or 'none'}'); "
+                            f"cannot correlate content across environments without cryptographic hash."
+                        ),
+                        is_malformed_hash=True
+                    )
+                )
+
         return results
 
     def _score_process_pair(self, p_a: ProcessObservation, p_b: ProcessObservation) -> Tuple[float, str]:
@@ -241,22 +344,27 @@ class EvidenceComparator:
         is_lolbin = (img_a in lolbins or img_b in lolbins)
 
         # Ancestry similarity (Jaccard)
-        anc_a = set(s.lower() for s in p_a.lineage_path[:-1])
-        anc_b = set(s.lower() for s in p_b.lineage_path[:-1])
-        if anc_a or anc_b:
+        def get_ancestors(proc: ProcessObservation) -> Set[str]:
+            if not proc.lineage_path:
+                return set()
+            if proc.lineage_path[-1].lower() == proc.image_name.lower():
+                return set(s.lower() for s in proc.lineage_path[:-1])
+            return set(s.lower() for s in proc.lineage_path)
+
+        anc_a = get_ancestors(p_a)
+        anc_b = get_ancestors(p_b)
+        if anc_a and anc_b:
             anc_union = anc_a | anc_b
             anc_intersect = anc_a & anc_b
             anc_sim = len(anc_intersect) / len(anc_union) if anc_union else 0.0
         else:
-            anc_sim = 1.0  # Both root processes
+            anc_sim = 0.0
 
         # Argument similarity (Jaccard)
         if args_a and args_b:
             arg_intersect = args_a & args_b
             arg_union = args_a | args_b
             arg_jaccard = len(arg_intersect) / len(arg_union) if arg_union else 0.0
-        elif not args_a and not args_b:
-            arg_jaccard = 1.0
         else:
             arg_jaccard = 0.0
 
@@ -324,6 +432,10 @@ class EvidenceComparator:
                 -x[0],
                 procs_a[x[1]].image_name.lower(),
                 procs_b[x[2]].image_name.lower(),
+                procs_a[x[1]].command_line or "",
+                procs_b[x[2]].command_line or "",
+                "/".join(procs_a[x[1]].lineage_path),
+                "/".join(procs_b[x[2]].lineage_path),
                 procs_a[x[1]].source_pid,
                 procs_b[x[2]].source_pid
             )
@@ -557,17 +669,20 @@ class EvidenceComparator:
                     self.report_a.report_id: na.evidence,
                     self.report_b.report_id: nb.evidence
                 }
-                obs_presence = ObservationPresence.OBSERVED_IN_BOTH
-                causal = CausalExplanation.CORROBORATED_EXECUTION
-                causal_stat = "CORROBORATED_SOCKET"
                 conn_state = "SOCKET_RECORD_LOGGED"
                 if cross_corr == "DIRECT_IDENTIFIER_MATCH":
+                    obs_presence = ObservationPresence.OBSERVED_IN_BOTH
+                    causal = CausalExplanation.CORROBORATED_EXECUTION
+                    causal_stat = "CORROBORATED_SOCKET"
                     interpretation = (
                         f"Socket observation '{key}' corroborated across both reports with matching connection attributes. "
                         f"Telemetry confirms both environments logged socket activity; does not establish "
                         f"full application-layer handshake completion or identical payload transmission without packet-level capture."
                     )
                 else:
+                    obs_presence = ObservationPresence.OBSERVED_IN_BOTH
+                    causal = CausalExplanation.UNEXPLAINED
+                    causal_stat = "AGGREGATE_ENDPOINT_CORROBORATION"
                     interpretation = (
                         f"Endpoint '{key}' logged multiple socket records ({len(list_a)} in {self.report_a.report_id}, "
                         f"{len(list_b)} in {self.report_b.report_id}). Specific stream-to-stream bijection is unestablished "

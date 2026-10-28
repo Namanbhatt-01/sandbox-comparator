@@ -125,14 +125,28 @@ impl<'a> EvidenceComparator<'a> {
     fn reconcile_files(&self) -> Vec<ReconciledFileItem> {
         let mut results = Vec::new();
 
+        fn is_valid_sha256(h: &str) -> bool {
+            h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit())
+        }
+
         let mut files_a_by_hash: BTreeMap<String, Vec<&DroppedFileObservation>> = BTreeMap::new();
+        let mut unhashed_a: Vec<&DroppedFileObservation> = Vec::new();
         for f in &self.report_a.dropped_files {
-            files_a_by_hash.entry(f.sha256.clone()).or_default().push(f);
+            if is_valid_sha256(&f.sha256) && !f.is_malformed_hash {
+                files_a_by_hash.entry(f.sha256.to_ascii_lowercase()).or_default().push(f);
+            } else {
+                unhashed_a.push(f);
+            }
         }
 
         let mut files_b_by_hash: BTreeMap<String, Vec<&DroppedFileObservation>> = BTreeMap::new();
+        let mut unhashed_b: Vec<&DroppedFileObservation> = Vec::new();
         for f in &self.report_b.dropped_files {
-            files_b_by_hash.entry(f.sha256.clone()).or_default().push(f);
+            if is_valid_sha256(&f.sha256) && !f.is_malformed_hash {
+                files_b_by_hash.entry(f.sha256.to_ascii_lowercase()).or_default().push(f);
+            } else {
+                unhashed_b.push(f);
+            }
         }
 
         let mut all_hashes: HashSet<String> = HashSet::new();
@@ -309,6 +323,121 @@ impl<'a> EvidenceComparator<'a> {
             }
         }
 
+        // Reconcile unhashed or malformed-hash files (never group by empty hash!)
+        let mut used_unhashed_b: HashSet<usize> = HashSet::new();
+        for fa in unhashed_a {
+            let mut best_b_idx = None;
+            for (b_idx, fb) in unhashed_b.iter().enumerate() {
+                if used_unhashed_b.contains(&b_idx) {
+                    continue;
+                }
+                if !fa.file_path.is_empty()
+                    && !fb.file_path.is_empty()
+                    && fa.file_path.trim().eq_ignore_ascii_case(fb.file_path.trim())
+                {
+                    best_b_idx = Some(b_idx);
+                    break;
+                }
+            }
+
+            if let Some(b_idx) = best_b_idx {
+                used_unhashed_b.insert(b_idx);
+                let fb = unhashed_b[b_idx];
+                let mut filenames = BTreeMap::new();
+                let mut filepaths = BTreeMap::new();
+                let mut evidence_links = BTreeMap::new();
+
+                filenames.insert(self.report_a.report_id.clone(), fa.file_name.clone());
+                filenames.insert(self.report_b.report_id.clone(), fb.file_name.clone());
+                filepaths.insert(self.report_a.report_id.clone(), fa.file_path.clone());
+                filepaths.insert(self.report_b.report_id.clone(), fb.file_path.clone());
+                evidence_links.insert(self.report_a.report_id.clone(), fa.evidence.clone());
+                evidence_links.insert(self.report_b.report_id.clone(), fb.evidence.clone());
+
+                results.push(ReconciledFileItem {
+                    sha256: if !fa.sha256.is_empty() { fa.sha256.clone() } else if !fb.sha256.is_empty() { fb.sha256.clone() } else { "UNAVAILABLE_MISSING_HASH".to_string() },
+                    observation_presence: ObservationPresence::OBSERVED_IN_BOTH,
+                    causal_explanation: CausalExplanation::UNEXPLAINED,
+                    filenames_by_report: filenames,
+                    file_paths_by_report: filepaths,
+                    evidence_links,
+                    epistemic_interpretation: format!(
+                        "Files share matching path '{}' across runs, but lack verified cryptographic SHA-256 hashes (Report A: '{}', Report B: '{}'). Content identity cannot be verified; payload corroboration remains unestablished.",
+                        fa.file_path,
+                        if fa.sha256.is_empty() { "none" } else { &fa.sha256 },
+                        if fb.sha256.is_empty() { "none" } else { &fb.sha256 }
+                    ),
+                    is_malformed_hash: true,
+                });
+            } else {
+                let mut filenames = BTreeMap::new();
+                let mut filepaths = BTreeMap::new();
+                let mut evidence_links = BTreeMap::new();
+
+                filenames.insert(self.report_a.report_id.clone(), fa.file_name.clone());
+                filepaths.insert(self.report_a.report_id.clone(), fa.file_path.clone());
+                evidence_links.insert(self.report_a.report_id.clone(), fa.evidence.clone());
+                evidence_links.insert(
+                    self.report_b.report_id.clone(),
+                    EvidencePointer::missing(
+                        &self.report_b.report_id,
+                        &format!("Unhashed file '{}' unrecorded in Report B", fa.file_name),
+                        "File unrecorded or lacks valid hash in Report B",
+                    ),
+                );
+
+                results.push(ReconciledFileItem {
+                    sha256: if !fa.sha256.is_empty() { fa.sha256.clone() } else { "UNAVAILABLE_MISSING_HASH".to_string() },
+                    observation_presence: ObservationPresence::OBSERVED_ONLY_IN_A,
+                    causal_explanation: self.evaluate_file_causality(self.report_b),
+                    filenames_by_report: filenames,
+                    file_paths_by_report: filepaths,
+                    evidence_links,
+                    epistemic_interpretation: format!(
+                        "Observed only in Report A ('{}'). File lacks a verified SHA-256 hash (recorded: '{}'); cannot correlate content across environments without cryptographic hash.",
+                        fa.file_name,
+                        if fa.sha256.is_empty() { "none" } else { &fa.sha256 }
+                    ),
+                    is_malformed_hash: true,
+                });
+            }
+        }
+
+        for (b_idx, fb) in unhashed_b.iter().enumerate() {
+            if !used_unhashed_b.contains(&b_idx) {
+                let mut filenames = BTreeMap::new();
+                let mut filepaths = BTreeMap::new();
+                let mut evidence_links = BTreeMap::new();
+
+                filenames.insert(self.report_b.report_id.clone(), fb.file_name.clone());
+                filepaths.insert(self.report_b.report_id.clone(), fb.file_path.clone());
+                evidence_links.insert(self.report_b.report_id.clone(), fb.evidence.clone());
+                evidence_links.insert(
+                    self.report_a.report_id.clone(),
+                    EvidencePointer::missing(
+                        &self.report_a.report_id,
+                        &format!("Unhashed file '{}' unrecorded in Report A", fb.file_name),
+                        "File unrecorded or lacks valid hash in Report A",
+                    ),
+                );
+
+                results.push(ReconciledFileItem {
+                    sha256: if !fb.sha256.is_empty() { fb.sha256.clone() } else { "UNAVAILABLE_MISSING_HASH".to_string() },
+                    observation_presence: ObservationPresence::OBSERVED_ONLY_IN_B,
+                    causal_explanation: self.evaluate_file_causality(self.report_a),
+                    filenames_by_report: filenames,
+                    file_paths_by_report: filepaths,
+                    evidence_links,
+                    epistemic_interpretation: format!(
+                        "Observed only in Report B ('{}'). File lacks a verified SHA-256 hash (recorded: '{}'); cannot correlate content across environments without cryptographic hash.",
+                        fb.file_name,
+                        if fb.sha256.is_empty() { "none" } else { &fb.sha256 }
+                    ),
+                    is_malformed_hash: true,
+                });
+            }
+        }
+
         results
     }
 
@@ -335,25 +464,27 @@ impl<'a> EvidenceComparator<'a> {
         let is_lolbin = lolbins.contains(&img_a.as_str()) || lolbins.contains(&img_b.as_str());
 
         // Ancestry similarity (Jaccard)
-        let anc_a: HashSet<String> = if p_a.lineage_path.len() > 1 {
-            p_a.lineage_path[..p_a.lineage_path.len() - 1]
-                .iter()
-                .map(|s| s.to_ascii_lowercase())
-                .collect()
-        } else {
-            HashSet::new()
+        let get_ancestors = |p: &ProcessObservation| -> HashSet<String> {
+            if p.lineage_path.is_empty() {
+                return HashSet::new();
+            }
+            if p.lineage_path.last().map(|s| s.to_ascii_lowercase()) == Some(p.image_name.to_ascii_lowercase()) {
+                p.lineage_path[..p.lineage_path.len() - 1]
+                    .iter()
+                    .map(|s| s.to_ascii_lowercase())
+                    .collect()
+            } else {
+                p.lineage_path
+                    .iter()
+                    .map(|s| s.to_ascii_lowercase())
+                    .collect()
+            }
         };
 
-        let anc_b: HashSet<String> = if p_b.lineage_path.len() > 1 {
-            p_b.lineage_path[..p_b.lineage_path.len() - 1]
-                .iter()
-                .map(|s| s.to_ascii_lowercase())
-                .collect()
-        } else {
-            HashSet::new()
-        };
+        let anc_a = get_ancestors(p_a);
+        let anc_b = get_ancestors(p_b);
 
-        let anc_sim = if !anc_a.is_empty() || !anc_b.is_empty() {
+        let anc_sim = if !anc_a.is_empty() && !anc_b.is_empty() {
             let intersect = anc_a.intersection(&anc_b).count();
             let union = anc_a.union(&anc_b).count();
             if union > 0 {
@@ -362,7 +493,7 @@ impl<'a> EvidenceComparator<'a> {
                 0.0
             }
         } else {
-            1.0 // Both root
+            0.0
         };
 
         // Argument similarity (Jaccard)
@@ -374,8 +505,6 @@ impl<'a> EvidenceComparator<'a> {
             } else {
                 0.0
             }
-        } else if args_a.is_empty() && args_b.is_empty() {
-            1.0
         } else {
             0.0
         };
@@ -462,8 +591,12 @@ impl<'a> EvidenceComparator<'a> {
         all_candidate_pairs.sort_by(|a, b| {
             b.0.partial_cmp(&a.0)
                 .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| procs_a[a.1].image_name.cmp(&procs_a[b.1].image_name))
-                .then_with(|| procs_b[a.2].image_name.cmp(&procs_b[b.2].image_name))
+                .then_with(|| procs_a[a.1].image_name.to_ascii_lowercase().cmp(&procs_b[b.1].image_name.to_ascii_lowercase()))
+                .then_with(|| procs_b[a.2].image_name.to_ascii_lowercase().cmp(&procs_b[b.2].image_name.to_ascii_lowercase()))
+                .then_with(|| procs_a[a.1].command_line.cmp(&procs_b[b.1].command_line))
+                .then_with(|| procs_b[a.2].command_line.cmp(&procs_b[b.2].command_line))
+                .then_with(|| procs_a[a.1].lineage_path.join("/").cmp(&procs_b[b.1].lineage_path.join("/")))
+                .then_with(|| procs_b[a.2].lineage_path.join("/").cmp(&procs_b[b.2].lineage_path.join("/")))
                 .then_with(|| procs_a[a.1].source_pid.cmp(&procs_a[b.1].source_pid))
                 .then_with(|| procs_b[a.2].source_pid.cmp(&procs_b[b.2].source_pid))
         });
@@ -777,6 +910,12 @@ impl<'a> EvidenceComparator<'a> {
                     )
                 };
 
+                let (causal, causal_stat) = if cross_corr == "DIRECT_IDENTIFIER_MATCH" {
+                    (CausalExplanation::CORROBORATED_EXECUTION, "CORROBORATED_SOCKET".to_string())
+                } else {
+                    (CausalExplanation::UNEXPLAINED, "AGGREGATE_ENDPOINT_CORROBORATION".to_string())
+                };
+
                 results.push(ReconciledNetworkItem {
                     connection_key: key.clone(),
                     observation_presence: ObservationPresence::OBSERVED_IN_BOTH,
@@ -784,8 +923,8 @@ impl<'a> EvidenceComparator<'a> {
                     connection_state: "SOCKET_RECORD_LOGGED".to_string(),
                     policy_decision: None,
                     cross_report_correlation: cross_corr,
-                    causal_status: "CORROBORATED_SOCKET".to_string(),
-                    causal_explanation: CausalExplanation::CORROBORATED_EXECUTION,
+                    causal_status: causal_stat,
+                    causal_explanation: causal,
                     policy_decision_record: None,
                     policy_decision_evidence: None,
                     epistemic_interpretation: interp,

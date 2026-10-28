@@ -110,7 +110,12 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
         if isinstance(p, dict) and "process_id" in p:
             try:
                 pid_int = int(p["process_id"])
-                pid_to_proc[pid_int] = p
+                if pid_int in pid_to_proc:
+                    norm_report.parser_warnings.append(
+                        f"Duplicate process_id {pid_int} detected in CAPE process telemetry. Process lineage resolution preserves first seen record; subsequent instances may indicate PID reuse."
+                    )
+                else:
+                    pid_to_proc[pid_int] = p
             except (ValueError, TypeError):
                 norm_report.parser_warnings.append(f"Invalid non-integer process_id: {p.get('process_id')}")
 

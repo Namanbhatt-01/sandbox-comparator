@@ -1,7 +1,7 @@
 # Evidence-Aware Sandbox Comparator
 
 [![CI](https://github.com/Namanbhatt-01/sandbox-comparator/actions/workflows/ci.yml/badge.svg)](https://github.com/Namanbhatt-01/sandbox-comparator/actions)
-[![Tests: 34 Passing](https://img.shields.io/badge/tests-34%20passing-brightgreen.svg)](tests/)
+[![Tests: 46 Passing](https://img.shields.io/badge/tests-46%20passing-brightgreen.svg)](tests/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Architecture: Offline--First](https://img.shields.io/badge/architecture-offline--first-emerald.svg)]()
@@ -48,7 +48,7 @@ sandbox-comparator compare \
 ```
 
 ### Step 5: Verify Test Suite
-Run the 34 unit, regression, and browser DOM security tests locally:
+Run the complete test suite (46 Python tests, 9 Rust tests, DOM XSS suite, and air-gap privacy verification):
 ```bash
 make test-all
 # Or: make test && make dom-test && make rust-test
@@ -66,7 +66,7 @@ Security analysts frequently submit malware to multiple sandboxes or execute rep
 
 **Sandbox Comparator solves this locally:**
 1. **Behavioral Normalization**: Maps diverse vendor schemas into a common behavioral model (processes, dropped files, sockets, limitation warnings).
-2. **Order-Independent Bipartite Matching**: Aligns process trees using multi-factor similarity heuristics (image name, command-line arguments, ancestry depth) without relying on volatile PIDs.
+2. **Anchor-Preserving Greedy Bipartite Matching**: Deterministically aligns process trees using multi-factor similarity heuristics (image name, command-line arguments, ancestry depth) with intrinsic attribute tie-breaking, preserving unambiguous anchor matches without relying on volatile PIDs.
 3. **Epistemic Disentanglement**: Separates what telemetry actually logged from what remains uncertain.
 4. **Source Evidence Provenance**: Every matched or missing entity links directly to an RFC 6901 JSON pointer resolving to the exact raw source line.
 5. **100% Offline-First Execution**: Runs entirely on your local machine with zero external network requests or font imports.
@@ -245,7 +245,7 @@ make audit-privacy
 ## 10. Product Editions & Commercial Roadmap
 
 Sandbox Comparator is built under an open-core, utility-first model:
-- **Community Edition (Free / MIT)**: 100% offline-first CLI and local web workspace; CAPE, Falcon, and Cuckoo ingestion; global bipartite matching; RFC 6901 evidence inspector; Markdown exports.
+- **Community Edition (Free / MIT)**: 100% offline-first CLI and local web workspace; CAPE, Falcon, and Cuckoo ingestion; anchor-preserving greedy bipartite matching; RFC 6901 evidence inspector; Markdown exports.
 - **Professional Edition (Planned / ₹999/mo)**: Any.Run & Joe Sandbox native parsers; persistent SQLite workspace history; automated YARA/Sigma rule generation; executive PDF reports.
 - **Team & Enterprise (Planned / ₹4,999/mo)**: Private self-hosted sync layer; SOAR webhooks (Splunk Phantom, Cortex XSOAR); centralized cryptographically signed audit logs.
 
