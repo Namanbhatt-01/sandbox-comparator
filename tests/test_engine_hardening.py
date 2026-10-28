@@ -288,6 +288,62 @@ class TestEngineHardening(unittest.TestCase):
                     f"Selected match PID {pid_b} appeared in its own alternative candidates!"
                 )
 
+    def test_deterministic_tie_breaking_under_process_list_permutation(self):
+        """
+        Verify that when candidate pairs have identical heuristic similarity scores,
+        deterministic tie-breaking ensures identical assignment regardless of input list permutation.
+        """
+        import random
+
+        ptr = EvidencePointer("rep", "/proc/0", "proc", {}, True)
+
+        # Three processes in A with identical structure
+        procs_a = [
+            ProcessObservation("rep_a", 101, 1, "worker.exe", "worker.exe --task A", ["host.exe", "worker.exe"], 1, ptr),
+            ProcessObservation("rep_a", 102, 1, "worker.exe", "worker.exe --task B", ["host.exe", "worker.exe"], 1, ptr),
+            ProcessObservation("rep_a", 103, 1, "worker.exe", "worker.exe --task C", ["host.exe", "worker.exe"], 1, ptr),
+        ]
+
+        procs_b = [
+            ProcessObservation("rep_b", 201, 1, "worker.exe", "worker.exe --task A", ["host.exe", "worker.exe"], 1, ptr),
+            ProcessObservation("rep_b", 202, 1, "worker.exe", "worker.exe --task B", ["host.exe", "worker.exe"], 1, ptr),
+            ProcessObservation("rep_b", 203, 1, "worker.exe", "worker.exe --task C", ["host.exe", "worker.exe"], 1, ptr),
+        ]
+
+        # Baseline run
+        rep_a_base = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, processes=list(procs_a))
+        rep_b_base = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, processes=list(procs_b))
+        base_res = EvidenceComparator(rep_a_base, rep_b_base).reconcile()
+        base_pairs = {
+            p.pids_by_report.get("rep_a"): p.pids_by_report.get("rep_b")
+            for p in base_res.reconciled_processes
+            if "rep_a" in p.pids_by_report and "rep_b" in p.pids_by_report
+        }
+
+        # Run 10 permutations
+        rng = random.Random(42)
+        for i in range(10):
+            shuffled_a = list(procs_a)
+            shuffled_b = list(procs_b)
+            rng.shuffle(shuffled_a)
+            rng.shuffle(shuffled_b)
+
+            rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, processes=shuffled_a)
+            rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, processes=shuffled_b)
+            res = EvidenceComparator(rep_a, rep_b).reconcile()
+
+            perm_pairs = {
+                p.pids_by_report.get("rep_a"): p.pids_by_report.get("rep_b")
+                for p in res.reconciled_processes
+                if "rep_a" in p.pids_by_report and "rep_b" in p.pids_by_report
+            }
+
+            self.assertEqual(
+                base_pairs,
+                perm_pairs,
+                f"Permutation {i} resulted in divergent process assignment! Expected {base_pairs}, got {perm_pairs}"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

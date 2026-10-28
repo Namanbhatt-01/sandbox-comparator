@@ -146,8 +146,10 @@ impl<'a> EvidenceComparator<'a> {
         sorted_hashes.sort();
 
         for h in sorted_hashes {
-            let list_a = files_a_by_hash.get(&h).cloned().unwrap_or_default();
-            let list_b = files_b_by_hash.get(&h).cloned().unwrap_or_default();
+            let mut list_a = files_a_by_hash.get(&h).cloned().unwrap_or_default();
+            let mut list_b = files_b_by_hash.get(&h).cloned().unwrap_or_default();
+            list_a.sort_by(|x, y| x.file_path.cmp(&y.file_path).then_with(|| x.file_name.cmp(&y.file_name)));
+            list_b.sort_by(|x, y| x.file_path.cmp(&y.file_path).then_with(|| x.file_name.cmp(&y.file_name)));
 
             let mut matched_pairs: Vec<(Option<&DroppedFileObservation>, Option<&DroppedFileObservation>)> =
                 Vec::new();
@@ -223,13 +225,20 @@ impl<'a> EvidenceComparator<'a> {
                         evidence_links.insert(self.report_a.report_id.clone(), fa.evidence.clone());
                         evidence_links.insert(self.report_b.report_id.clone(), fb.evidence.clone());
 
-                        let interp = if fa.file_name != fb.file_name {
+                        let interp = if fa.file_name != fb.file_name
+                            || (!fa.file_path.is_empty()
+                                && !fb.file_path.is_empty()
+                                && !fa.file_path.trim().eq_ignore_ascii_case(fb.file_path.trim()))
+                        {
                             format!(
-                                "Matched by SHA-256 hash across naming discrepancies. Report A recorded '{}'; Report B recorded '{}'.",
-                                fa.file_name, fb.file_name
+                                "Identical binary payload (SHA-256: {}) corroborated across runs, but filesystem paths or names diverge (Report A: '{}'; Report B: '{}'). Confirms content identity rather than identical filesystem deployment instance.",
+                                h, fa.file_path, fb.file_path
                             )
                         } else {
-                            format!("Corroborated by SHA-256 hash and identical filename '{}'.", fa.file_name)
+                            format!(
+                                "Corroborated by SHA-256 hash and identical path '{}'.",
+                                if !fa.file_path.is_empty() { &fa.file_path } else { &fa.file_name }
+                            )
                         };
 
                         (
@@ -449,7 +458,15 @@ impl<'a> EvidenceComparator<'a> {
         }
 
         // Step 2: Greedy score-sorted bipartite matching with anchor preservation (highest scores matched first)
-        all_candidate_pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        // Deterministic tie-breaking on intrinsic attributes ensures order independence
+        all_candidate_pairs.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| procs_a[a.1].image_name.cmp(&procs_a[b.1].image_name))
+                .then_with(|| procs_b[a.2].image_name.cmp(&procs_b[b.2].image_name))
+                .then_with(|| procs_a[a.1].source_pid.cmp(&procs_a[b.1].source_pid))
+                .then_with(|| procs_b[a.2].source_pid.cmp(&procs_b[b.2].source_pid))
+        });
 
         let mut matched_a_to_b: BTreeMap<usize, (usize, f64, String)> = BTreeMap::new();
         let mut matched_b_indices: HashSet<usize> = HashSet::new();

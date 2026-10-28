@@ -108,8 +108,8 @@ class EvidenceComparator:
         all_hashes = sorted(list(set(files_a_by_hash.keys()) | set(files_b_by_hash.keys())))
 
         for h in all_hashes:
-            list_a = list(files_a_by_hash.get(h, []))
-            list_b = list(files_b_by_hash.get(h, []))
+            list_a = sorted(files_a_by_hash.get(h, []), key=lambda x: (x.file_path or "", x.file_name or ""))
+            list_b = sorted(files_b_by_hash.get(h, []), key=lambda x: (x.file_path or "", x.file_name or ""))
 
             matched_pairs: List[Tuple[Optional[DroppedFileObservation], Optional[DroppedFileObservation]]] = []
             used_b_indices: Set[int] = set()
@@ -164,13 +164,14 @@ class EvidenceComparator:
                     evidence_links[self.report_a.report_id] = fa.evidence
                     evidence_links[self.report_b.report_id] = fb.evidence
 
-                    if fa.file_name != fb.file_name:
+                    if fa.file_name != fb.file_name or (fa.file_path and fb.file_path and fa.file_path.strip().lower() != fb.file_path.strip().lower()):
                         interpretation = (
-                            f"Matched by SHA-256 hash across naming discrepancies. "
-                            f"Report A recorded '{fa.file_name}'; Report B recorded '{fb.file_name}'."
+                            f"Identical binary payload (SHA-256: {h}) corroborated across runs, but filesystem paths or names diverge "
+                            f"(Report A: '{fa.file_path or fa.file_name}'; Report B: '{fb.file_path or fb.file_name}'). "
+                            f"Confirms content identity rather than identical filesystem deployment instance."
                         )
                     else:
-                        interpretation = f"Corroborated by SHA-256 hash and identical filename '{fa.file_name}'."
+                        interpretation = f"Corroborated by SHA-256 hash and identical path '{fa.file_path or fa.file_name}'."
 
                 elif fa and not fb:
                     obs_presence = ObservationPresence.OBSERVED_ONLY_IN_A
@@ -317,7 +318,16 @@ class EvidenceComparator:
             candidates_by_a[idx_a].sort(key=lambda x: x[1], reverse=True)
 
         # Step 2: Greedy score-sorted bipartite matching with anchor preservation (highest scores matched first)
-        all_candidate_pairs.sort(key=lambda x: x[0], reverse=True)
+        # Deterministic tie-breaking on intrinsic attributes ensures order independence
+        all_candidate_pairs.sort(
+            key=lambda x: (
+                -x[0],
+                procs_a[x[1]].image_name.lower(),
+                procs_b[x[2]].image_name.lower(),
+                procs_a[x[1]].source_pid,
+                procs_b[x[2]].source_pid
+            )
+        )
         matched_a_to_b: Dict[int, Tuple[int, float, str]] = {}
         matched_b_indices: Set[int] = set()
 
