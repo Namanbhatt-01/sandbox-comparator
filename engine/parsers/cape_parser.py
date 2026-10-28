@@ -80,6 +80,8 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
 
     # 1. Limitations or warnings
     raw_warnings = info.get("errors_or_warnings") or raw.get("debug", {}).get("errors") or []
+    if not isinstance(raw_warnings, list):
+        raw_warnings = []
     for idx, warn in enumerate(raw_warnings):
         norm_report.limitations.append(
             CollectionLimitation(
@@ -91,7 +93,7 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
         )
 
     # 2. Process tree & lineage
-    raw_processes = behavior.get("processes") or []
+    raw_processes = behavior.get("processes") if isinstance(behavior.get("processes"), list) else []
     pid_to_proc: Dict[int, Dict[str, Any]] = {}
     for p in raw_processes:
         if isinstance(p, dict) and "process_id" in p:
@@ -168,7 +170,7 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
         raw_dropped = raw["dropped"]
         dropped_pointer_base = ["dropped"]
     else:
-        raw_dropped = behavior.get("dropped") or []
+        raw_dropped = behavior.get("dropped") if isinstance(behavior.get("dropped"), list) else []
         dropped_pointer_base = ["behavior", "dropped"]
 
     for idx, df in enumerate(raw_dropped):
@@ -225,7 +227,8 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
         network = behavior.get("network") or {}
         network_pointer_base = ["behavior", "network"]
 
-    for idx, dns in enumerate(network.get("dns") or []):
+    dns_list = network.get("dns") if isinstance(network.get("dns"), list) else []
+    for idx, dns in enumerate(dns_list):
         if not isinstance(dns, dict):
             continue
         domain = str(dns.get("domain") or "")
@@ -248,7 +251,8 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
             )
         )
 
-    for idx, http in enumerate(network.get("http") or []):
+    http_list = network.get("http") if isinstance(network.get("http"), list) else []
+    for idx, http in enumerate(http_list):
         if not isinstance(http, dict):
             continue
         url = str(http.get("url") or "")
@@ -271,7 +275,8 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
             )
         )
 
-    for idx, tcp in enumerate(network.get("tcp") or []):
+    tcp_list = network.get("tcp") if isinstance(network.get("tcp"), list) else []
+    for idx, tcp in enumerate(tcp_list):
         if not isinstance(tcp, dict):
             continue
         dst_ip = str(tcp.get("dst_ip") or "")

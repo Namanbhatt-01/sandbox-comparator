@@ -1,4 +1,5 @@
 use crate::models::ComparisonReport;
+use crate::provenance::truncate_utf8;
 
 pub fn format_markdown_report(comparison: &ComparisonReport) -> String {
     let mut lines = Vec::new();
@@ -70,7 +71,7 @@ pub fn format_markdown_report(comparison: &ComparisonReport) -> String {
         }
 
         let malformed_flag = if f.is_malformed_hash { " [MALFORMED HASH]" } else { "" };
-        let hash_prefix = if f.sha256.len() > 12 { &f.sha256[..12] } else { &f.sha256 };
+        let hash_prefix = truncate_utf8(&f.sha256, 12);
 
         lines.push(format!(
             "| `{}`...{} | `{}` | `{}` | `{}` | `{}` | {} |",
@@ -86,7 +87,7 @@ pub fn format_markdown_report(comparison: &ComparisonReport) -> String {
 
     lines.push("\n**File Epistemic Interpretations**:".to_string());
     for f in &comparison.reconciled_files {
-        let hash_prefix = if f.sha256.len() > 16 { &f.sha256[..16] } else { &f.sha256 };
+        let hash_prefix = truncate_utf8(&f.sha256, 16);
         lines.push(format!("- **`{}...`**: {}", hash_prefix, f.epistemic_interpretation));
     }
 

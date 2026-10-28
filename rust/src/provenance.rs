@@ -6,6 +6,20 @@ pub fn unescape_rfc6901_token(token: &str) -> String {
     token.replace("~1", "/").replace("~0", "~")
 }
 
+pub fn truncate_utf8(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}
+
+pub fn preview_str(s: &str, max_chars: usize) -> String {
+    match s.char_indices().nth(max_chars) {
+        None => s.to_string(),
+        Some((idx, _)) => format!("{}...", &s[..idx]),
+    }
+}
+
 pub fn build_rfc6901_pointer(tokens: &[String]) -> String {
     if tokens.is_empty() {
         return String::new();

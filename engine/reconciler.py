@@ -554,7 +554,7 @@ class EvidenceComparator:
                 if f"port:{event.port}" in lim.target_pattern or str(event.port) in lim.description:
                     policy_text = f"{target_report.sandbox_name} [{lim.code}]: {lim.description}"
                     interpretation = (
-                        f"TCP observation present in Report A; {target_report.sandbox_name} contains a general egress-policy "
+                        f"TCP observation present in {event.report_id}; {target_report.sandbox_name} contains a general egress-policy "
                         f"warning mentioning port {event.port}; relationship between the records is not established."
                     )
                     return (

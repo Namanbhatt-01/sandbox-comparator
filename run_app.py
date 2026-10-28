@@ -24,6 +24,8 @@ def main():
     print("  Evidence-Aware Sandbox Comparator — Local-First SaaS MVP")
     print(f"  Access UI at: {url}")
     print("  Offline-first execution: No sandbox telemetry is sent to any server.")
+    if args.host == "0.0.0.0":
+        print("  [SECURITY WARNING] Bound to 0.0.0.0! Service is reachable across your LAN.")
     print("=" * 70)
 
     if not args.no_browser:

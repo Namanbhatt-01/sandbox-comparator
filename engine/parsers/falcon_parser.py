@@ -51,7 +51,7 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
             norm_report.unsupported_fields.append(f"Falcon-like section '{unmapped}' is unmapped in current normalized schema")
 
     # 1. Limitations & system warnings
-    raw_warnings = sub_info.get("system_warnings") or []
+    raw_warnings = sub_info.get("system_warnings") if isinstance(sub_info.get("system_warnings"), list) else []
     for idx, warn in enumerate(raw_warnings):
         if not isinstance(warn, dict):
             continue
@@ -129,16 +129,16 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
             )
         )
 
-        children = node.get("children") or []
+        children = node.get("children") if isinstance(node.get("children"), list) else []
         for c_idx, child in enumerate(children):
             traverse_node(child, current_lineage, token_path + ["children", c_idx])
 
-    root_processes = execution.get("process_tree") or []
+    root_processes = execution.get("process_tree") if isinstance(execution.get("process_tree"), list) else []
     for r_idx, root_node in enumerate(root_processes):
         traverse_node(root_node, [], ["execution", "process_tree", r_idx])
 
     # 3. Created files
-    created_files = execution.get("created_files") or []
+    created_files = execution.get("created_files") if isinstance(execution.get("created_files"), list) else []
     for idx, cf in enumerate(created_files):
         if not isinstance(cf, dict):
             continue
@@ -185,7 +185,8 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
 
     # 4. Network traffic
     net = execution.get("network_traffic") or {}
-    for idx, dns in enumerate(net.get("dns_requests") or []):
+    dns_list = net.get("dns_requests") if isinstance(net.get("dns_requests"), list) else []
+    for idx, dns in enumerate(dns_list):
         if not isinstance(dns, dict):
             continue
         host = str(dns.get("hostname") or "")
@@ -209,7 +210,8 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
             )
         )
 
-    for idx, http in enumerate(net.get("http_transactions") or []):
+    http_list = net.get("http_transactions") if isinstance(net.get("http_transactions"), list) else []
+    for idx, http in enumerate(http_list):
         if not isinstance(http, dict):
             continue
         uri = str(http.get("uri") or "")
@@ -232,7 +234,8 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
             )
         )
 
-    for idx, tcp in enumerate(net.get("active_tcp_streams") or []):
+    tcp_list = net.get("active_tcp_streams") if isinstance(net.get("active_tcp_streams"), list) else []
+    for idx, tcp in enumerate(tcp_list):
         if not isinstance(tcp, dict):
             continue
         dip = str(tcp.get("destination_ip") or "")

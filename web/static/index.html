@@ -767,6 +767,7 @@
 
   <script>
     let currentComparison = null;
+    let evidenceRegistry = [];
 
     async function loadPreset(presetId) {
       document.getElementById('btn-preset-y').classList.toggle('btn-active', presetId === 'scenario_y');
@@ -821,6 +822,7 @@
 
     function renderComparison(data) {
       currentComparison = data;
+      evidenceRegistry = [];
 
       // Banner
       document.getElementById('banner-sha256').textContent = data.sample_sha256 || 'Unknown';
@@ -872,20 +874,30 @@
         const scorePct = Math.round(p.heuristic_similarity_score * 100);
         const scoreColor = scorePct >= 80 ? 'var(--emerald)' : (scorePct >= 45 ? 'var(--amber)' : 'var(--text-dim)');
 
-        const pidA = p.pids[data.report_a_id] !== undefined ? p.pids[data.report_a_id] : '-';
-        const pidB = p.pids[data.report_b_id] !== undefined ? p.pids[data.report_b_id] : '-';
+        const pidA = (p.pids && p.pids[data.report_a_id] !== undefined) ? escapeHtml(p.pids[data.report_a_id]) : '-';
+        const pidB = (p.pids && p.pids[data.report_b_id] !== undefined) ? escapeHtml(p.pids[data.report_b_id]) : '-';
 
         let ptrHtml = '';
         Object.entries(p.evidence_pointers).forEach(([rep, ptr]) => {
           if (ptr && ptr.is_available) {
-            ptrHtml += `<div><a class="pointer-link" onclick="inspectEvidence('${p.image_name}', '${ptr.json_pointer}', '${escapeHtml(ptr.event_summary)}', '${escapeHtml(p.epistemic_interpretation)}', ${escapeHtml(JSON.stringify(ptr.raw_snippet))})">&#128269; ${ptr.json_pointer}</a></div>`;
+            const evIdx = evidenceRegistry.length;
+            evidenceRegistry.push({
+              title: p.image_name,
+              pointer: ptr.json_pointer,
+              summary: ptr.event_summary,
+              epistemic: p.epistemic_interpretation,
+              snippet: ptr.raw_snippet
+            });
+            ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
           }
         });
+
+        const lineageSafe = (p.lineage_path || []).map(escapeHtml).join(' &rarr; ');
 
         tr.innerHTML = `
           <td>
             <div style="font-weight:600;">${escapeHtml(p.image_name)}</div>
-            <div class="mono" style="font-size: 11px; color: var(--text-dim);">${escapeHtml(p.lineage_path.join(' &rarr; '))}</div>
+            <div class="mono" style="font-size: 11px; color: var(--text-dim);">${lineageSafe}</div>
           </td>
           <td>${presencePill}</td>
           <td>${confPill}</td>
@@ -911,20 +923,32 @@
           ? '<span class="pill pill-green">CORROBORATED</span>'
           : '<span class="pill pill-rose">SINGLE REPORT</span>';
 
-        const nameA = f.filenames[data.report_a_id] || '<span style="color:var(--text-dim)">(none)</span>';
-        const nameB = f.filenames[data.report_b_id] || '<span style="color:var(--text-dim)">(none)</span>';
+        const rawNameA = f.filenames ? f.filenames[data.report_a_id] : null;
+        const rawNameB = f.filenames ? f.filenames[data.report_b_id] : null;
+        const nameA = rawNameA ? escapeHtml(rawNameA) : '<span style="color:var(--text-dim)">(none)</span>';
+        const nameB = rawNameB ? escapeHtml(rawNameB) : '<span style="color:var(--text-dim)">(none)</span>';
 
         let ptrHtml = '';
         Object.entries(f.evidence_pointers).forEach(([rep, ptr]) => {
           if (ptr && ptr.is_available) {
-            ptrHtml += `<div><a class="pointer-link" onclick="inspectEvidence('${f.sha256.substring(0, 16)}', '${ptr.json_pointer}', '${escapeHtml(ptr.event_summary)}', '${escapeHtml(f.epistemic_interpretation)}', ${escapeHtml(JSON.stringify(ptr.raw_snippet))})">&#128269; ${ptr.json_pointer}</a></div>`;
+            const evIdx = evidenceRegistry.length;
+            evidenceRegistry.push({
+              title: f.sha256 ? f.sha256.substring(0, 16) : 'File',
+              pointer: ptr.json_pointer,
+              summary: ptr.event_summary,
+              epistemic: f.epistemic_interpretation,
+              snippet: ptr.raw_snippet
+            });
+            ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
           }
         });
 
+        const shortHash = f.sha256 ? escapeHtml(f.sha256.substring(0, 16)) : 'Unknown';
+
         tr.innerHTML = `
-          <td class="mono" style="font-size:12px;">${f.sha256.substring(0, 16)}...</td>
+          <td class="mono" style="font-size:12px;">${shortHash}...</td>
           <td>${presencePill}</td>
-          <td><span class="pill pill-blue">${f.causal_explanation}</span></td>
+          <td><span class="pill pill-blue">${escapeHtml(f.causal_explanation)}</span></td>
           <td>${nameA}</td>
           <td>${nameB}</td>
           <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
@@ -941,13 +965,21 @@
           ? '<span class="pill pill-green">OBSERVED IN BOTH</span>'
           : '<span class="pill pill-rose">OBSERVED IN ONE</span>';
 
-        const statePill = `<span class="pill pill-purple">${n.connection_state}</span>`;
-        const causalPill = `<span class="pill pill-blue">${n.causal_status}</span>`;
+        const statePill = `<span class="pill pill-purple">${escapeHtml(n.connection_state)}</span>`;
+        const causalPill = `<span class="pill pill-blue">${escapeHtml(n.causal_status)}</span>`;
 
         let ptrHtml = '';
         Object.entries(n.evidence_pointers).forEach(([rep, ptr]) => {
           if (ptr && ptr.is_available) {
-            ptrHtml += `<div><a class="pointer-link" onclick="inspectEvidence('${n.connection}', '${ptr.json_pointer}', '${escapeHtml(ptr.event_summary)}', '${escapeHtml(n.epistemic_interpretation)}', ${escapeHtml(JSON.stringify(ptr.raw_snippet))})">&#128269; ${ptr.json_pointer}</a></div>`;
+            const evIdx = evidenceRegistry.length;
+            evidenceRegistry.push({
+              title: n.connection,
+              pointer: ptr.json_pointer,
+              summary: ptr.event_summary,
+              epistemic: n.epistemic_interpretation,
+              snippet: ptr.raw_snippet
+            });
+            ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
           }
         });
 
@@ -969,7 +1001,7 @@
         lims.forEach(l => {
           const tr = document.createElement('tr');
           tr.innerHTML = `
-            <td class="mono" style="font-weight:600;">${rep}</td>
+            <td class="mono" style="font-weight:600;">${escapeHtml(rep)}</td>
             <td><span class="pill pill-amber">${escapeHtml(l.code)}</span></td>
             <td><span class="pill pill-purple">${escapeHtml(l.category)}</span></td>
             <td>${escapeHtml(l.description)}</td>
@@ -987,15 +1019,17 @@
       btn.classList.add('active');
     }
 
-    function inspectEvidence(title, pointer, summary, epistemic, rawSnippet) {
-      document.getElementById('drawer-pointer').textContent = `rfc6901://${pointer}`;
-      document.getElementById('drawer-summary').textContent = summary;
-      document.getElementById('drawer-epistemic').textContent = epistemic;
+    function openEvidenceByIndex(idx) {
+      const ev = evidenceRegistry[idx];
+      if (!ev) return;
+      document.getElementById('drawer-pointer').textContent = `rfc6901://${ev.pointer}`;
+      document.getElementById('drawer-summary').textContent = ev.summary;
+      document.getElementById('drawer-epistemic').textContent = ev.epistemic;
       try {
-        const obj = typeof rawSnippet === 'string' ? JSON.parse(rawSnippet) : rawSnippet;
+        const obj = typeof ev.snippet === 'string' ? JSON.parse(ev.snippet) : ev.snippet;
         document.getElementById('drawer-snippet').textContent = JSON.stringify(obj, null, 2);
       } catch (e) {
-        document.getElementById('drawer-snippet').textContent = String(rawSnippet);
+        document.getElementById('drawer-snippet').textContent = String(ev.snippet);
       }
       document.getElementById('drawer-overlay').classList.add('open');
       document.getElementById('drawer').classList.add('open');

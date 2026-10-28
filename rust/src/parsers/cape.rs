@@ -2,7 +2,7 @@ use crate::models::{
     CollectionLimitation, DroppedFileObservation, EvidencePointer, NetworkObservation,
     NormalizedReport, ProcessObservation,
 };
-use crate::provenance::build_rfc6901_pointer;
+use crate::provenance::{build_rfc6901_pointer, preview_str};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -233,11 +233,7 @@ pub fn parse_cape_report(raw: &Value, report_id: &str) -> NormalizedReport {
                 idx.to_string(),
             ]);
 
-            let cmd_preview = if cmd.len() > 60 {
-                format!("{}...", &cmd[..60])
-            } else {
-                cmd.clone()
-            };
+            let cmd_preview = preview_str(&cmd, 60);
 
             let pointer = EvidencePointer::available(
                 report_id,
@@ -318,11 +314,7 @@ pub fn parse_cape_report(raw: &Value, report_id: &str) -> NormalizedReport {
             token_path.push(idx.to_string());
             let pointer_str = build_rfc6901_pointer(&token_path);
 
-            let hash_preview = if raw_hash.len() > 12 {
-                format!("{}...", &raw_hash[..12])
-            } else {
-                raw_hash.clone()
-            };
+            let hash_preview = preview_str(&raw_hash, 12);
 
             let pointer = EvidencePointer::available(
                 report_id,

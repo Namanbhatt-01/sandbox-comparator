@@ -182,15 +182,21 @@ def compare_reports(req: CompareRequest):
         raw_a = req.report_a_raw
         raw_b = req.report_b_raw
 
-    norm_a = parse_auto_report(raw_a, report_id=id_a)
-    norm_b = parse_auto_report(raw_b, report_id=id_b)
+    try:
+        norm_a = parse_auto_report(raw_a, report_id=id_a)
+        norm_b = parse_auto_report(raw_b, report_id=id_b)
 
-    comparator = EvidenceComparator(norm_a, norm_b)
-    comparison = comparator.reconcile()
+        comparator = EvidenceComparator(norm_a, norm_b)
+        comparison = comparator.reconcile()
 
-    serialized = serialize_comparison(comparison)
-    serialized["markdown_report"] = format_markdown_report(comparison)
-    return serialized
+        serialized = serialize_comparison(comparison)
+        serialized["markdown_report"] = format_markdown_report(comparison)
+        return serialized
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Reconciliation error while parsing or comparing reports: {str(exc)}"
+        )
 
 
 @app.get("/", response_class=HTMLResponse)

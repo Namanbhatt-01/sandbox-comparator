@@ -4,6 +4,7 @@ use crate::models::{
     ProcessMatchConfidence, ProcessObservation, ReconciledFileItem, ReconciledNetworkItem,
     ReconciledProcessItem,
 };
+use crate::provenance::truncate_utf8;
 use std::collections::{BTreeMap, HashSet};
 
 pub fn tokenize_cmdline(cmd: &str) -> HashSet<String> {
@@ -243,7 +244,7 @@ impl<'a> EvidenceComparator<'a> {
                         filepaths.insert(self.report_a.report_id.clone(), fa.file_path.clone());
                         evidence_links.insert(self.report_a.report_id.clone(), fa.evidence.clone());
 
-                        let hash_pref = if h.len() > 12 { &h[..12] } else { &h };
+                        let hash_pref = truncate_utf8(&h, 12);
                         evidence_links.insert(
                             self.report_b.report_id.clone(),
                             EvidencePointer::missing(
@@ -266,7 +267,7 @@ impl<'a> EvidenceComparator<'a> {
                         filepaths.insert(self.report_b.report_id.clone(), fb.file_path.clone());
                         evidence_links.insert(self.report_b.report_id.clone(), fb.evidence.clone());
 
-                        let hash_pref = if h.len() > 12 { &h[..12] } else { &h };
+                        let hash_pref = truncate_utf8(&h, 12);
                         evidence_links.insert(
                             self.report_a.report_id.clone(),
                             EvidencePointer::missing(
@@ -778,8 +779,8 @@ impl<'a> EvidenceComparator<'a> {
                         let policy_text =
                             format!("{} [{}]: {}", target_report.sandbox_name, lim.code, lim.description);
                         let interpretation = format!(
-                            "TCP observation present in Report A; {} contains a general egress-policy warning mentioning port {}; relationship between the records is not established.",
-                            target_report.sandbox_name, port
+                            "TCP observation present in {}; {} contains a general egress-policy warning mentioning port {}; relationship between the records is not established.",
+                            event.report_id, target_report.sandbox_name, port
                         );
                         return (
                             CausalExplanation::POLICY_DECISION_RECORDED,
