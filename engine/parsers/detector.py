@@ -46,3 +46,4 @@ def parse_auto_report(raw: Optional[Dict[str, Any]], report_id: str = "report") 
         if schema == "unknown":
             norm.parser_warnings.append("Schema could not be conclusively identified; defaulted to CAPE/Cuckoo defensive parser.")
         return norm
+
