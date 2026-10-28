@@ -211,8 +211,8 @@ impl<'a> EvidenceComparator<'a> {
                 let mut filenames = BTreeMap::new();
                 let mut filepaths = BTreeMap::new();
                 let mut evidence_links = BTreeMap::new();
-                let is_malformed = opt_a.map_or(false, |f| f.is_malformed_hash)
-                    || opt_b.map_or(false, |f| f.is_malformed_hash);
+                let is_malformed = opt_a.is_some_and(|f| f.is_malformed_hash)
+                    || opt_b.is_some_and(|f| f.is_malformed_hash);
 
                 let (obs_presence, causal, interpretation) = match (opt_a, opt_b) {
                     (Some(fa), Some(fb)) => {
@@ -772,7 +772,7 @@ impl<'a> EvidenceComparator<'a> {
                     let pattern_match = lim
                         .target_pattern
                         .as_deref()
-                        .map_or(false, |pat| pat.contains(&format!("port:{}", port)));
+                        .is_some_and(|pat| pat.contains(&format!("port:{}", port)));
                     let desc_match = lim.description.contains(&port_str);
 
                     if pattern_match || desc_match {

@@ -58,7 +58,7 @@ pub fn parse_falcon_report(raw: &Value, report_id: &str) -> NormalizedReport {
 
     // Unmapped sections check
     for unmapped in &["signatures", "mitre_attacks", "registry_events", "memory_injections"] {
-        if root.contains_key(*unmapped) || execution.map_or(false, |e| e.contains_key(*unmapped)) {
+        if root.contains_key(*unmapped) || execution.is_some_and(|e| e.contains_key(*unmapped)) {
             norm_report.unsupported_fields.push(format!(
                 "Falcon-like section '{}' is unmapped in current normalized schema",
                 unmapped
@@ -82,10 +82,8 @@ pub fn parse_falcon_report(raw: &Value, report_id: &str) -> NormalizedReport {
                 };
 
                 let mut target_pattern = None;
-                if category == "EGRESS_POLICY" {
-                    if desc.contains("8080") {
-                        target_pattern = Some("port:8080".to_string());
-                    }
+                if category == "EGRESS_POLICY" && desc.contains("8080") {
+                    target_pattern = Some("port:8080".to_string());
                 }
 
                 let ptr_str = build_rfc6901_pointer(&[

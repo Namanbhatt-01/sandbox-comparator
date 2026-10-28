@@ -10,7 +10,6 @@ Validates:
 
 import unittest
 from engine.models import (
-    CollectionLimitation,
     DroppedFileObservation,
     EvidencePointer,
     NetworkObservation,

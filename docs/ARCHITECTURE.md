@@ -115,3 +115,4 @@ Every reconciled artifact links to its origin through standard RFC 6901 JSON Poi
    - Telemetry summary.
    - Epistemic interpretation (distinguishing observed presence from non-occurrence).
    - Pretty-printed raw JSON snippet formatted for chain-of-custody documentation.
+

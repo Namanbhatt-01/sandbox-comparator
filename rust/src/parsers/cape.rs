@@ -98,7 +98,7 @@ pub fn parse_cape_report(raw: &Value, report_id: &str) -> NormalizedReport {
     for unmapped in &[
         "signatures", "memory", "debug", "apistats", "virustotal", "strings", "curtain", "extracted",
     ] {
-        if root.contains_key(*unmapped) || behavior.map_or(false, |b| b.contains_key(*unmapped)) {
+        if root.contains_key(*unmapped) || behavior.is_some_and(|b| b.contains_key(*unmapped)) {
             norm_report
                 .unsupported_fields
                 .push(format!("CAPE v2.2 schema section '{}' is unmapped in current normalized schema", unmapped));

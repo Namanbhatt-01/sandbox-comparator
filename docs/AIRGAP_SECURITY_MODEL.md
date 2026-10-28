@@ -46,3 +46,4 @@ To guarantee security against DOM XSS:
    <a class="pointer-link" onclick="openEvidenceByIndex(0)">...</a>
    ```
 3. **Automated Verification**: JSDOM executes `web/static/index.html` with active script evaluation enabled against comprehensive XSS payloads across all tables, findings cards, summary verdicts, and drawer elements.
+

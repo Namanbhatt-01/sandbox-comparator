@@ -7,11 +7,6 @@ import unittest
 from unittest.mock import patch
 from fastapi import HTTPException
 
-from engine.models import (
-    CausalExplanation,
-    ProcessMatchConfidence,
-    ObservationPresence,
-)
 from engine.parsers import parse_auto_report, parse_cape_report, parse_falcon_report
 from engine.parsers.detector import detect_schema
 from engine.reconciler import EvidenceComparator

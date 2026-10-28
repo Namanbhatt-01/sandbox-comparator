@@ -3,7 +3,7 @@ Benchmark comparison against VirusTotal's Behavior capabilities (Milestone 3 Dis
 Distinguishes measured automated runtime from preliminary manual workload models.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 from .models import CausalExplanation, ComparisonReport, ObservationPresence, ProcessMatchConfidence
 from .timing_benchmark import ExecutionBenchmark
 

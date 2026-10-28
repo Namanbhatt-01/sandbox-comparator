@@ -8,7 +8,6 @@ import json
 import sys
 from pathlib import Path
 from engine.parsers import parse_auto_report
-from engine.provenance import resolve_json_pointer
 from engine.reconciler import EvidenceComparator
 from engine.vt_benchmark import VTBenchmarkEvaluator
 

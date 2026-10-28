@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from engine.parsers import parse_auto_report
