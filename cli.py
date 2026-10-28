@@ -7,16 +7,15 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from engine.parsers.cape_parser import parse_cape_report
-from engine.parsers.falcon_parser import parse_falcon_report
+from engine.parsers import parse_auto_report
 from engine.provenance import resolve_json_pointer
 from engine.reconciler import EvidenceComparator
 from engine.vt_benchmark import VTBenchmarkEvaluator
 
 
-def format_markdown_report(comparison, vt_eval) -> str:
+def format_markdown_report(comparison, vt_eval=None) -> str:
     lines = []
-    lines.append(f"# Evidence-Aware Sandbox Comparison Report (Milestone 3)")
+    lines.append(f"# Evidence-Aware Sandbox Comparison Report")
     lines.append(f"**Target Sample SHA-256**: `{comparison.sample_sha256}`\n")
     
     meta_a = comparison.provenance_metadata.get(comparison.report_a_id, {})
@@ -90,55 +89,59 @@ def format_markdown_report(comparison, vt_eval) -> str:
             for u in unmapped:
                 lines.append(f"- {u}")
 
-    lines.append("\n## 5. Performance & Competitor Benchmark Evaluation")
-    timing = vt_eval.get("measured_runtime_benchmark", {})
-    e2e = timing.get("end_to_end_runtime_ms", {})
-    workload = vt_eval.get("manual_workflow_model", {})
-    lines.append(f"- **Measured Machine Runtime (Mean / Median / p95)**: `{e2e.get('mean')} ms / {e2e.get('median')} ms / {e2e.get('p95')} ms` (N={timing.get('iterations')} runs on in-memory fixtures)")
-    lines.append(f"- **Estimated Analyst Cognitive Review Time**: `~60 to 120 seconds` (reading & verifying diff table)")
-    lines.append(f"- **Preliminary Manual Workload Model (VirusTotal Tabs)**: `~{workload.get('total_estimated_manual_time_minutes')} minutes` across 3 cross-tab inspection tasks\n")
+    if vt_eval:
+        lines.append("\n## 5. Performance & Competitor Benchmark Evaluation")
+        timing = vt_eval.get("measured_runtime_benchmark", {})
+        e2e = timing.get("end_to_end_runtime_ms", {})
+        workload = vt_eval.get("manual_workflow_model", {})
+        lines.append(f"- **Measured Machine Runtime (Mean / Median / p95)**: `{e2e.get('mean')} ms / {e2e.get('median')} ms / {e2e.get('p95')} ms` (N={timing.get('iterations')} runs on in-memory fixtures)")
+        lines.append(f"- **Estimated Analyst Cognitive Review Time**: `~60 to 120 seconds` (reading & verifying diff table)")
+        lines.append(f"- **Preliminary Manual Workload Model (VirusTotal Tabs)**: `~{workload.get('total_estimated_manual_time_minutes')} minutes` across 3 cross-tab inspection tasks\n")
 
-    matrix = vt_eval.get("matrix", {})
-    lines.append("| Capability | Prototype (Automated) | VT Individual Reports (Manual) | VT Merged Summary |")
-    lines.append("| :--- | :--- | :--- | :--- |")
-    for dim, data in matrix.items():
-        proto_b = data["prototype"]["behavior"]
-        vt_ind = data["virustotal_individual_reports"]["behavior"]
-        vt_mrg = data["virustotal_merged_summary"]["behavior"]
-        lines.append(f"| **{data['capability']}** | {proto_b} | {vt_ind} | {vt_mrg} |")
+        matrix = vt_eval.get("matrix", {})
+        lines.append("| Capability | Prototype (Automated) | VT Individual Reports (Manual) | VT Merged Summary |")
+        lines.append("| :--- | :--- | :--- | :--- |")
+        for dim, data in matrix.items():
+            proto_b = data["prototype"]["behavior"]
+            vt_ind = data["virustotal_individual_reports"]["behavior"]
+            vt_mrg = data["virustotal_merged_summary"]["behavior"]
+            lines.append(f"| **{data['capability']}** | {proto_b} | {vt_ind} | {vt_mrg} |")
 
-    lines.append(f"\n**Verdict**: {vt_eval.get('evaluation_verdict')}")
+        lines.append(f"\n**Verdict**: {vt_eval.get('evaluation_verdict')}")
     return "\n".join(lines)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evidence-Aware Sandbox Report Comparator (Milestone 3)")
+    parser = argparse.ArgumentParser(description="Evidence-Aware Sandbox Report Comparator (Production MVP)")
     parser.add_argument("--report-a", default="data/report_format_a_cape.json", help="Path to Report A JSON")
     parser.add_argument("--report-b", default="data/report_format_b_falcon.json", help="Path to Report B JSON")
-    parser.add_argument("--vt-ref", default="data/virustotal_behavior_summary_reference.json", help="Path to VT summary JSON")
+    parser.add_argument("--vt-ref", default=None, help="Optional path to VT summary JSON for benchmark comparison")
     parser.add_argument("--format", choices=["text", "json", "markdown"], default="markdown", help="Output format")
     args = parser.parse_args()
 
     base_dir = Path(__file__).resolve().parent
     path_a = base_dir / args.report_a if not Path(args.report_a).is_absolute() else Path(args.report_a)
     path_b = base_dir / args.report_b if not Path(args.report_b).is_absolute() else Path(args.report_b)
-    path_vt = base_dir / args.vt_ref if not Path(args.vt_ref).is_absolute() else Path(args.vt_ref)
 
     with open(path_a, "r") as fa:
         raw_a = json.load(fa)
     with open(path_b, "r") as fb:
         raw_b = json.load(fb)
-    with open(path_vt, "r") as fvt:
-        raw_vt = json.load(fvt)
 
-    norm_a = parse_cape_report(raw_a, report_id="report_a_cape")
-    norm_b = parse_falcon_report(raw_b, report_id="report_b_falcon")
+    norm_a = parse_auto_report(raw_a, report_id=path_a.stem)
+    norm_b = parse_auto_report(raw_b, report_id=path_b.stem)
 
     comparator = EvidenceComparator(norm_a, norm_b)
     comparison = comparator.reconcile()
 
-    vt_evaluator = VTBenchmarkEvaluator(comparison, raw_vt)
-    benchmark_res = vt_evaluator.evaluate_capabilities()
+    benchmark_res = None
+    if args.vt_ref:
+        path_vt = base_dir / args.vt_ref if not Path(args.vt_ref).is_absolute() else Path(args.vt_ref)
+        if path_vt.exists():
+            with open(path_vt, "r") as fvt:
+                raw_vt = json.load(fvt)
+            vt_evaluator = VTBenchmarkEvaluator(comparison, raw_vt)
+            benchmark_res = vt_evaluator.evaluate_capabilities()
 
     if args.format == "markdown":
         md = format_markdown_report(comparison, benchmark_res)

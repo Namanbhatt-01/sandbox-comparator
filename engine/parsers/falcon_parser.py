@@ -58,7 +58,13 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
         code = str(warn.get("code") or "WARN_GENERIC")
         desc = str(warn.get("description") or "")
         category = "TIMEOUT" if "TIMEOUT" in code else ("EGRESS_POLICY" if "EGRESS" in code else "ENVIRONMENT")
-        target_pattern = "port:8080" if "8080" in desc else None
+        target_pattern = None
+        if category == "EGRESS_POLICY":
+            port_match = re.search(r"\bport\s*[:=]?\s*(\d{1,5})\b", desc, re.IGNORECASE)
+            if port_match:
+                target_pattern = f"port:{port_match.group(1)}"
+            elif "8080" in desc:
+                target_pattern = "port:8080"
         
         warn_pointer = EvidencePointer(
             report_id=report_id,

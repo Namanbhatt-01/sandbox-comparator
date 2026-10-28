@@ -154,10 +154,10 @@ class ReconciledNetworkItem:
     connection_key: str
     observation_presence: ObservationPresence
     observation_type: str                  # e.g. 'TELEMETRY_LOGGED_SOCKET_RECORD'
-    connection_state: str                  # 'ATTEMPTED', 'ESTABLISHED', 'BLOCKED', 'UNKNOWN'
+    connection_state: str                  # 'ATTEMPTED', 'ESTABLISHED', 'BLOCKED', 'SOCKET_RECORD_LOGGED', 'UNKNOWN'
     policy_decision: Optional[str]         # Explicit policy record or warning text
     cross_report_correlation: str          # 'DIRECT_IDENTIFIER_MATCH', 'CONTEXTUAL_SIMILARITY_ONLY', 'UNLINKED'
-    causal_status: str                     # 'CONFIRMED', 'PLAUSIBLE_HYPOTHESIS', 'UNKNOWN'
+    causal_status: str                     # 'CONFIRMED', 'CORROBORATED_SOCKET', 'PLAUSIBLE_HYPOTHESIS', 'UNKNOWN'
     causal_explanation: CausalExplanation
     policy_decision_record: Optional[str]
     policy_decision_evidence: Optional[EvidencePointer]
