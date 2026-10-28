@@ -35,16 +35,35 @@ Measure whether cross-sandbox and cross-run telemetry reconciliation is an acute
 
 ---
 
-## 3. Structured Retrospective Interview Script (45 Minutes)
+## 3. Standardized 60-Minute Interview & Evaluation Script
 
-### Phase 1: Grounding in the Most Recent Real Incident (10 mins)
+```
++---------------------------------------------------------------------------------------------------+
+| 60-MINUTE SESSION TIME BUDGET                                                                     |
++-------------------+-----------------+-------------------------------------------------------------+
+| Time Window       | Duration        | Phase & Operational Activity                                |
++-------------------+-----------------+-------------------------------------------------------------+
+| 00:00 – 00:05     | 5 minutes       | Phase 0: Welcome, Privacy Disclosure & Voluntary Consent    |
+| 00:05 – 00:20     | 15 minutes      | Phases 1–3: Retrospective Grounding in Most Recent Workflow |
+| 00:20 – 00:33     | 13 minutes      | Task 1 Execution (12 min / 720s cap + 1 min transition)     |
+| 00:33 – 00:46     | 13 minutes      | Task 2 Execution (12 min / 720s cap + 1 min transition)     |
+| 00:46 – 01:00     | 14 minutes      | Phase 4C: Structured Debrief, Usability & Safe Trial Follow-up|
++-------------------+-----------------+-------------------------------------------------------------+
+```
+
+### Phase 0: Welcome, Privacy Disclosure & Voluntary Consent (5 mins)
+- Explain exploratory research purpose (not a product pitch or vendor evaluation).
+- Reaffirm strict data boundaries: no client names, internal IPs, or confidential binaries needed.
+- Obtain voluntary consent; explain anonymous Study ID coding.
+
+### Phase 1: Grounding in the Most Recent Real Incident (5 mins)
 *Goal: Elicit concrete factual history, not idealized opinions.*
 
 - *"Think back to the most recent suspicious file where you looked at multiple sandbox runs or reports. Without disclosing confidential client names or sensitive specifics, what was the nature of the sample, and why did you submit it to more than one environment?"*
 - *"Which specific sandboxes or tools did you inspect?"*
 - *"What specific question were you trying to answer? (e.g., Did it drop a secondary payload? What network destinations did it contact? What persistence keys did it write?)"*
 
-### Phase 2: Workflow Reconstruction & Friction Mapping (15 mins)
+### Phase 2: Workflow Reconstruction & Friction Mapping (5 mins)
 *Goal: Reconstruct step-by-step how the analyst performed the comparison manually.*
 
 - *"When you had Report A and Report B in front of you, how did you actually compare them? (e.g., two browser windows side-by-side, copying hashes into a text editor, using `jq`/Python, or relying on memory)?"*
@@ -55,15 +74,15 @@ Measure whether cross-sandbox and cross-run telemetry reconciliation is an acute
   - *Follow-up (Neutral, only if unprompted)*: *"Did environment constraints, execution timeouts, or sandbox policy warnings play any role in your assessment?"*
 - *"Approximately how many minutes did you spend cross-checking these reports before you felt confident writing your report or alert ticket?"*
 
-### Phase 3: Testing Against Current State-of-the-Art Tools (10 mins)
+### Phase 3: Testing Against Current State-of-the-Art Tools (5 mins)
 *Goal: Understand the strengths and limitations of existing tools without disparaging them.*
 
 - *"If you used VirusTotal or a multi-engine console in this investigation, what did its merged summary provide, and what did you still need to inspect elsewhere?"*
   - *Probe*: *"Did you click into individual sandbox tabs (e.g., CAPE vs Falcon vs Zenbox)? What specific data were you cross-referencing between them?"*
 - *"Do you use any automated diff tools, scripts, or spreadsheets for this today? Where do they break when comparing different sandbox schemas?"*
 
-### Phase 4: Prototype Walkthrough & Reality Check (10 mins)
-*Goal: Present the evidence-aware reconciliation output, strictly preserving the boundary between unaided analyst comprehension and prompted guided insights.*
+### Phase 4: Controlled Task Execution & Usability Reality Check (40 mins)
+*Goal: Administer assigned crossover tasks and debrief, strictly preserving the boundary between unaided analyst comprehension and prompted guided insights.*
 
 #### Methodological Phase Separation:
 - **Phase 4A (Unaided Inspection — Prior to Walkthrough)**:

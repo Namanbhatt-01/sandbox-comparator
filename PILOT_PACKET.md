@@ -1,6 +1,9 @@
-# Practitioner Pilot Packet: Evidence-Aware Malware Comparison Workflow (Milestone 5)
+# Practitioner Pilot Packet: Evidence-Aware Malware Comparison Workflow (Protocol v5.1 Locked Baseline)
 
 This document is the standardized, reproducible pilot protocol for evaluating the evidence-aware sandbox comparator against a manual reference-report baseline across 5 to 8 practicing security analysts.
+
+> [!IMPORTANT]
+> **Protocol v5.1 Version Lock**: Following pre-pilot rehearsals R1 and R2 executed against commit `dfec537` on 2026-10-28, this protocol packet has been updated to **Protocol v5.1** to resolve material rubric discrepancies in Scenario Y, clarify Condition B CLI invocation parity, neutralize question phrasing nudges, and enshrine the fixture cryptographic ledger. Rehearsal data (R1, R2) are quarantined from the main cohort dataset.
 
 ---
 
@@ -44,9 +47,18 @@ To ensure a fair, defensible comparison, both conditions receive **identical inp
 | Dimension | Condition A: Manual Reference Baseline | Condition B: Evidence-Aware Prototype |
 | :--- | :--- | :--- |
 | **Input Data** | Local raw JSON reports (CAPE schema fixture and Falcon-like approximation) + VT behavior reference JSON. | Identical local raw JSON reports + VT behavior reference JSON. |
-| **Interface / Tooling** | Text editors (VS Code / Sublime), terminal (`jq`, `grep`), or multi-window JSON inspection simulating typical manual triage. | Prototype CLI: `python3 cli.py --format markdown` (or `--format json`). |
+| **Interface / Tooling** | Text editors (VS Code / Sublime), terminal (`jq`, `grep`), or multi-window JSON inspection simulating typical manual triage. | Prototype CLI: `python3 cli.py --format markdown` (or `--format json`).<br>- **Scenario X Command**: `python3 cli.py --report-a data/report_format_a_cape.json --report-b data/report_format_b_falcon.json --vt-ref data/virustotal_behavior_summary_reference.json --format markdown`<br>- **Scenario Y Command**: `python3 cli.py --report-a data/real_sanitized_cape_v2_export.json --report-b data/report_format_b_falcon.json --vt-ref data/virustotal_behavior_summary_reference.json --format markdown` |
 | **Evidence Access** | Full access to all raw source files; manual copy-pasting of hashes and cross-referencing of process trees. | Automated cross-engine reconciliation table with source-resolvable RFC 6901 JSON pointers into the same source files. |
 | **Scope & Fairness** | Condition A is explicitly framed as a **manual reference-report baseline**, not a live VirusTotal web service test. | Condition B provides automated diffing; missing source fields in fixtures count as unavailable, not analyst error. |
+
+### Cryptographic Ledger of Fixture Hashes (Frozen at Commit `dfec537`):
+
+| Fixture Path | Byte Size | SHA-256 Cryptographic Hash | Scenario Role |
+| :--- | :--- | :--- | :--- |
+| `data/report_format_a_cape.json` | 3,518 bytes | `ebc90b1c6ed0fedf3d2634140d04ca9ae4f27eabe303cb60c4fd6f66fe2d7ec5` | Scenario X (Report A: CAPE v2.5 schema) |
+| `data/report_format_b_falcon.json` | 3,376 bytes | `898516f403d76607af5d885f0621b1f318277d879b300f48de244df51336fea3` | Scenario X (Report B: Falcon approximation) |
+| `data/real_sanitized_cape_v2_export.json` | 5,417 bytes | `b0b00603b22cd131cff509f466a36481a5725a73e99ce354eaaa623f5ef3c984` | Scenario Y (Sanitized CAPE v2.2 schema export) |
+| `data/virustotal_behavior_summary_reference.json` | 1,709 bytes | `8f45f1187ea847384a60a4097ef24b482b500ff4b767d8e9c08eab9923e9de05` | Scenarios X & Y (Threat Portal Reference) |
 
 ### Session Administration, Incomplete Task Handling & 4-Metric Reporting:
 - **Time Limit**: Exactly **12 minutes (720 seconds)** per scenario task.
@@ -73,7 +85,7 @@ To ensure a fair, defensible comparison, both conditions receive **identical inp
 
 #### Scenario X Questionnaire:
 1. **Reported Dropped Artifact Scope**: Based on the reports, do these entries represent matching reported SHA-256 values, modified variants, or completely different binaries? Explain what the reported evidence proves and what limitations remain regarding byte-level binary identity.
-2. **Process Tree Lineage**: In Environment 1, PID 4156 executed a PowerShell cradle. Which process in Environment 2 performed the equivalent step? Is this alignment certain or heuristic?
+2. **Process Tree Lineage**: In Environment 1, PID 4156 executed a PowerShell cradle. Which process in Environment 2 performed the equivalent step? Characterize the degree of confidence in this execution alignment and identify what telemetry supports or limits that determination.
 3. **Network Event Presence & Causation**: Environment 1 recorded a TCP observation to `203.0.113.88:8080`. Environment 2 did not record this connection. Did this connection occur in Environment 2? Explain the omission.
 4. **Attribution Boundary**: Can `203.0.113.88:8080` be confirmed as an active Command-and-Control (C2) server based on the sandbox telemetry? Justify your answer.
 
@@ -83,12 +95,14 @@ To ensure a fair, defensible comparison, both conditions receive **identical inp
 - **Fixtures**: `data/real_sanitized_cape_v2_export.json` (Sanitized CAPE v2.2 schema export fixture) vs `data/virustotal_behavior_summary_reference.json` (Aggregated reference summary).
 - **Fixture Provenance**: Sanitized CAPE v2.2 schema export fixture derived from native CAPE Sandbox v2.2 JSON reporting schema; external hosts/IPs sanitized with RFC 5737 documentation blocks and synthetic test mutexes.
 - **Briefing**:
-  > *"You are reviewing a sanitized CAPE v2.2 schema export fixture from an enterprise sandbox against an aggregated threat portal summary. You have 12 minutes to identify missing artifacts, verify process execution, and determine if telemetry omissions can be explained by environment constraints."*
+  > *"You are reviewing a sanitized CAPE v2.2 schema export fixture from an enterprise sandbox against an aggregated threat portal summary. You have 12 minutes to identify missing artifacts, verify process execution, and determine if telemetry omissions can be explained by environment constraints.*
+  >
+  > *Structural Schema Orientation Note for Scenario Y: In native CAPE v2.2 JSON exports, dropped files are placed under root key `/dropped` (with hashes, sizes, and guest paths), and network sockets under root key `/network/tcp`, while process trees reside under `/behavior/processes`. Note that `/behavior/summary/files` contains unhashed file paths."*
 
 #### Scenario Y Questionnaire:
-1. **Hash Verification & Dropped Scope**: What dropped files are corroborated across both the CAPE fixture and the summary? Are there dropped artifacts observed in only one report? Cite reported SHA-256 metadata from the reports.
-2. **Interpreter Commandline Divergence**: Did the suspicious PowerShell script execute via an intermediate cmd.exe shell wrapper or directly under the parent binary? What does the source lineage prove?
-3. **Missing Telemetry & Policy Restraints**: Identify whether any network connections were omitted, blocked by firewall policies, or unexplained. What evidence supports this?
+1. **Hash Verification & Dropped Scope**: What dropped files are corroborated across both the CAPE fixture and the Threat Portal summary reference? Are there dropped artifacts observed in only one report? Explain what reported SHA-256 metadata is available in each document.
+2. **Interpreter Commandline Divergence**: How does the execution lineage of the suspicious PowerShell script compare between the detailed CAPE export and the Threat Portal summary reference? What does the source lineage prove?
+3. **Network Event Presence & Contextual Telemetry**: Does the Threat Portal summary reference record the port 8080 connection present in the CAPE export? What contextual differences (protocol, parent PID, policy warnings, or limitations) exist between how each document presents this traffic?
 4. **Pointer Verification**: For every discrepancy identified, cite the exact source document and path/pointer where an analyst can independently inspect the raw telemetry.
 
 ---
@@ -156,11 +170,10 @@ Each question is evaluated on **tailored, domain-specific criteria** (4 question
 +-------------------------------------------------------------------------------------------------------------------------------+
 | Criteria                                                                                                              | Pts   |
 +-------------------------------------------------------------------------------------------------------------------------------+
-| Corroboration: Identifies update_payload.exe as corroborated across fixture and summary by reported SHA-256.          | 0 - 2 |
-| Unilateral Scope: Identifies mutex_flag.tmp as recorded only in CAPE fixture                                          | 0 - 1 |
-| (Reported SHA-256: c5e8f1b2d49a37210e4fbc8712a0956487e41203876541290384756102938475).                                |       |
-| Evidence Citation: References reported SHA-256 digest, unique prefix, or guest path for corroborated artifact.        | 0 - 1 |
-| (Participants earn credit for evidence identification and citation; memorization of full 64-char hash is not required)|       |
+| Path Corroboration: Identifies that update_payload.exe and mutex_flag.tmp both appear across both reports by path.     | 0 - 2 |
+| Unilateral Scope: Identifies staged_runner.bin and crash_reporter.log as present only in Threat Portal summary.       | 0 - 1 |
+| Hash Availability Citation: Explains that reported SHA-256 digests (a1b2c3... / c5e8f1...) exist only in CAPE fixture | 0 - 1 |
+| while the Threat Portal summary reference provides flat file paths without cryptographic digests.                     |       |
 | Provenance Citation: Resolves pointers to /dropped/0 and /dropped/1 in CAPE fixture.                                   | 0 - 1 |
 +-------------------------------------------------------------------------------------------------------------------------------+
 
@@ -176,13 +189,14 @@ Each question is evaluated on **tailored, domain-specific criteria** (4 question
 +-------------------------------------------------------------------------------------------------------------------------------+
 
 +-------------------------------------------------------------------------------------------------------------------------------+
-| Question 3: Missing Telemetry & Policy Restraints (5 Points)                                                                  |
+| Question 3: Network Event Presence & Contextual Telemetry (5 Points)                                                          |
 +-------------------------------------------------------------------------------------------------------------------------------+
 | Criteria                                                                                                              | Pts   |
 +-------------------------------------------------------------------------------------------------------------------------------+
-| Omission Status: Identifies that port 8080 TCP stream in CAPE fixture is absent from summary reference.              | 0 - 2 |
-| Absence of Policy Warning: Notes that summary notes "None" for limitations; omission cannot be attributed to policy.   | 0 - 1 |
-| Epistemic Discipline: Concludes omission cause is unverified/unexplained in summary without speculating.              | 0 - 1 |
+| Observation Presence: Identifies that 203.0.113.88:8080 is listed in both reports (/network/tcp/1 and ip_traffic).     | 0 - 2 |
+| Contextual Discrepancy: Identifies that CAPE provides protocol, source PID (5204), and HTTP transaction context,       | 0 - 1 |
+| whereas the Threat Portal summary collapses it into an unlinked string without execution context.                      |       |
+| Policy Discipline: Notes summary records "None" for limitations; context loss is due to portal aggregation, not policy| 0 - 1 |
 | Provenance Citation: Resolves pointer to /network/tcp/1 in CAPE fixture.                                              | 0 - 1 |
 +-------------------------------------------------------------------------------------------------------------------------------+
 
@@ -264,7 +278,8 @@ $$UCR = \frac{N_{\text{unsupported claims}}}{N_{\text{total analytical claims}}}
 +----+---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | SX | Process Lineage Alignment | HEURISTIC MATCH (Score: 0.94).                                                                                                                              |
 | 2  |                           | PID 4156 (Env 1) aligns with PID 8896 (Env 2). Both execute equivalent Invoke-WebRequest PowerShell cradle under cmd.exe wrapper at depth 3.               |
-|    |                           | Resolvable Pointers: Report A `/behavior/processes/2`, Report B `/execution/process_tree/0/children/0/children/0`. Alignment is heuristic, not certain.     |
+|    |                           | Resolvable Pointers: Report A `/behavior/processes/2`, Report B `/execution/process_tree/0/children/0/children/0`. Alignment is supported by command        |
+|    |                           | argument similarity (Jaccard: 0.82) and identical tree depth, but remains a heuristic alignment rather than absolute mathematical identity.                  |
 +----+---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | SX | Network Event Causation   | UNRECORDED IN ENV 2; PLAUSIBLE POLICY CORRELATION.                                                                                                          |
 | 3  |                           | Env 1 has TCP observation (`/behavior/network/tcp/1`); Env 2 logged system warning WARN_EGRESS_POLICY (`/submission_info/system_warnings/1`).               |
@@ -273,14 +288,18 @@ $$UCR = \frac{N_{\text{unsupported claims}}}{N_{\text{total analytical claims}}}
 | SX | Threat Attribution        | UNPROVEN / NO.                                                                                                                                              |
 | 4  |                           | Raw telemetry only logs a destination IP:port socket; does not establish C2 handshake or application command stream. Address is TEST-NET-3 documentation.  |
 +----+---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| SY | Corroborated Artifacts    | CORROBORATED: `update_payload.exe` (Reported SHA-256: `a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0`).                                 |
-| 1  |                           | UNILATERAL: `mutex_flag.tmp` (Reported SHA-256: `c5e8f1b2d49a37210e4fbc8712a0956487e41203876541290384756102938475`) recorded only in CAPE fixture (`/dropped/1`).|
+| SY | Corroborated Artifacts    | PATH CORROBORATION ACROSS REPORTS; HASHES PRESENT ONLY IN CAPE FIXTURE.                                                                                     |
+| 1  |                           | Corroboration: `update_payload.exe` and `mutex_flag.tmp` both appear across both reports by path. `staged_runner.bin` and `crash_reporter.log` are present   |
+|    |                           | only in the Threat Portal summary reference. Reported SHA-256 digests exist only in CAPE fixture (`update_payload.exe`: `a1b2c3...`; `mutex_flag.tmp`:      |
+|    |                           | `c5e8f1...`); Threat Portal summary provides flat file paths without cryptographic digests. Resolvable Pointers: CAPE `/dropped/0` and `/dropped/1`.       |
 +----+---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | SY | Lineage Divergence        | CAPE fixture proves 3-level lineage: `invoice_doc_sanitized.exe` -> `cmd.exe` -> `powershell.exe`. Resolvable Pointer: `/behavior/processes/2`.            |
 | 2  |                           | Aggregated summary reference flattens process strings and obscures execution parentage.                                                                     |
 +----+---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| SY | Network Omission          | Unexplained omission: port 8080 TCP stream in CAPE (`/network/tcp/1`) is absent from summary reference; summary records "None" for limitations.             |
-| 3  |                           | Cause of omission is unverified; cannot be attributed to egress policy.                                                                                     |
+| SY | Network Telemetry Scope   | PRESENT IN BOTH REPORTS; CONTEXTUAL METADATA STRIPPED IN PORTAL SUMMARY.                                                                                    |
+| 3  |                           | `203.0.113.88:8080` is listed in CAPE (`/network/tcp/1`) and in Threat Portal summary (`ip_traffic`). CAPE provides protocol (`TCP`), source PID (`5204`), |
+|    |                           | and HTTP transaction context; summary reference collapses it into a flat unlinked string. Summary notes "None" for limitations; context loss reflects        |
+|    |                           | portal aggregation, not recorded policy blocks. Resolvable Pointer: CAPE `/network/tcp/1`.                                                                 |
 +----+---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | SY | Provenance Verification   | Valid RFC 6901 pointers resolve to exact keys in CAPE fixture (`/dropped/0`, `/network/tcp/1`, `/behavior/processes/2`).                                    |
 | 4  |                           | Unmapped sections (`signatures`, `memory`, `apistats`, `debug`) are surfaced under unsupported_fields rather than dropped.                                  |
@@ -350,7 +369,7 @@ SCORING (Apply rubric matching the Administered Scenario):
 [ ] IF SCENARIO Y WAS ADMINISTERED:
     Q1 (Corroborated Scope):           [ /2 corroboration] + [ /1 unilateral] + [ /1 hash_cite] + [ /1 ptr] = ___ / 5
     Q2 (Lineage Divergence):           [ /2 lineage] + [ /1 args] + [ /1 flattening] + [ /1 ptr] = ___ / 5
-    Q3 (Missing Telemetry):            [ /2 omission] + [ /1 policy_check] + [ /1 epistemic] + [ /1 ptr] = ___ / 5
+    Q3 (Network Telemetry Context):    [ /2 presence] + [ /1 context_diff] + [ /1 policy_discipline] + [ /1 ptr] = ___ / 5
     Q4 (Pointer Integrity):            [ /2 pointer_valid] + [ /1 bidirectional] + [ /1 unmapped] + [ /1] = ___ / 5
 
 CLAIMS & SAFETY EVALUATION:
@@ -385,7 +404,7 @@ SCORING (Apply rubric matching the Administered Scenario):
 [ ] IF SCENARIO Y WAS ADMINISTERED:
     Q1 (Corroborated Scope):           [ /2 corroboration] + [ /1 unilateral] + [ /1 hash_cite] + [ /1 ptr] = ___ / 5
     Q2 (Lineage Divergence):           [ /2 lineage] + [ /1 args] + [ /1 flattening] + [ /1 ptr] = ___ / 5
-    Q3 (Missing Telemetry):            [ /2 omission] + [ /1 policy_check] + [ /1 epistemic] + [ /1 ptr] = ___ / 5
+    Q3 (Network Telemetry Context):    [ /2 presence] + [ /1 context_diff] + [ /1 policy_discipline] + [ /1 ptr] = ___ / 5
     Q4 (Pointer Integrity):            [ /2 pointer_valid] + [ /1 bidirectional] + [ /1 unmapped] + [ /1] = ___ / 5
 
 CLAIMS & SAFETY EVALUATION:

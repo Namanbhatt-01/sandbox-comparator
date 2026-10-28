@@ -1,6 +1,6 @@
 # Evidence-Aware Sandbox Comparator: Engineering & Audit Report (Milestone 4 -> 5)
 
-**Status**: Milestone 4 Engineering Hardening, Holdout Audit, CAPE v2 Schema Ingestion & Pre-Rehearsal Lock Complete  
+**Status**: Milestone 4 Engineering Hardening, Holdout Audit, CAPE v2 Schema Ingestion, R1/R2 Rehearsal Execution & Protocol v5.1 Lock Complete  
 **Codebase**: [`sandbox_comparator/`](file:///Users/namanbhatt/cfp/sandbox_comparator)  
 **Execution Command**: `python3 cli.py --format markdown`  
 **Test Suite**: `python3 -m unittest test_prototype.py test_calibration_and_semantics.py test_holdout_and_provenance.py test_real_cape_ingestion.py` (**23 passed, 0 failed, 0 errors**)  
@@ -10,8 +10,8 @@
 ## Executive Summary & Engineering Verdict
 
 > [!IMPORTANT]
-> **Verdict: Prototype Frozen; Rehearsal Protocol Version-Locked; Ready for Dry Run.**  
-> Feature development is strictly frozen (no cloud backends, AI summarizers, or web UIs) to prioritize workflow validation with 5–8 practitioners. This milestone resolves all methodological, semantic, and experimental design caveats:
+> **Verdict: Prototype Frozen; Pre-Pilot Rehearsals R1/R2 Completed; Protocol v5.1 Version-Locked; Ready for Cohort Pilot.**  
+> Feature development remains strictly frozen (no cloud backends, AI summarizers, or web UIs) to prioritize workflow validation with 5–8 practitioners. Pre-pilot procedural rehearsal (R1) and independent confirmation (R2) have been successfully completed against commit `dfec537`. Rehearsal findings identified four material defects (Scenario Y rubric/fixture factual mismatch, Condition B CLI invocation parity, unstated CAPE v2 schema navigation load, and question phrasing nudges), all of which have been resolved and formally locked in **Protocol v5.1** (`PILOT_PACKET.md` and `REHEARSAL_FINDINGS_AND_LOCK_RECORD.md`). All three Milestone 5 gates are now passed, and the protocol is ready for practitioner screening and recruitment.
 > 1. **Scenario-Driven Modular Scoring Sheet**: Corrected the evaluation form in [`PILOT_PACKET.md`](file:///Users/namanbhatt/cfp/sandbox_comparator/PILOT_PACKET.md) to select rubrics dynamically by the administered scenario (Scenario X vs Scenario Y), fully supporting the counterbalanced crossover design for all four groups (A, B, C, D) without scoring key mismatch.
 > 2. **Reported Hash Metadata Scope**: Documented that Scenario X fixtures contain controlled synthetic report metadata. The comparator verifies **reported SHA-256 metadata equivalence across JSON reports**; it does not claim independent binary-level re-hashing from disk images. Automated tests verify that cited RFC 6901 pointers resolve to exact matching 64-character digests (`a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0`).
 > 3. **Non-Causal Cohort-Level Error Analysis**: Formally separated condition-level UCR comparisons from individual paired crossover claims. Observational patterns are categorized using descriptive labels (*Observed only in baseline responses*, *Observed only in prototype responses*, *Observed across both*), acknowledging that cohort differences do not establish tool causality.
@@ -108,4 +108,4 @@ The pilot protocol ([`PILOT_PACKET.md`](file:///Users/namanbhatt/cfp/sandbox_com
 | :--- | :--- | :--- |
 | **Gate 1: Technical Integrity** | Ingestion of sanitized CAPE v2.2 schema export fixture; 100% pointer resolution against fixture; unmapped vendor sections surfaced. Validates compatibility with this schema fixture (not universal compatibility across all CAPE variants). | **PASSED** (23 automated unit tests). |
 | **Gate 2: Pilot Protocol Integrity** | Predefined randomized block crossover design ($N=5\text{ to }8$); 4-metric task reporting; non-causal UCR breakdown; verified cryptographic erasure protocol; neutral 3-step Phase 4 interview guide. | **PASSED** (Audited and version-locked in `PILOT_PACKET.md` v5.0 and `INTERVIEW_PROTOCOL.md` v5.0). |
-| **Gate 3: Pre-Pilot Rehearsal & Decision Gate** | Two dry-run rehearsal sessions testing schema knowledge load, pointer navigation load, evidence presence, and dual-reviewer calibration; followed by controlled pilot with $N=5\text{ to }8$. | **READY FOR PRE-PILOT REHEARSAL**. |
+| **Gate 3: Pre-Pilot Rehearsal & Decision Gate** | Two dry-run rehearsal sessions (R1, R2) testing schema knowledge load, pointer navigation load, evidence presence, and dual-reviewer calibration; 16/16 runbook items complete; material defects resolved in Protocol v5.1. | **PASSED** (Protocol v5.1 locked; documented in [`REHEARSAL_FINDINGS_AND_LOCK_RECORD.md`](file:///Users/namanbhatt/cfp/sandbox_comparator/REHEARSAL_FINDINGS_AND_LOCK_RECORD.md)). Ready for main cohort recruitment. |
