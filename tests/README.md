@@ -59,3 +59,4 @@ make rust-test
 1. **Adversarial JSON Types**: All parsers (`cape_parser`, `falcon_parser`, `detector`) are systematically fuzzed with non-dict types (strings, integers, booleans, lists, `None`) in place of expected sub-dictionaries to verify immunity against `AttributeError` and `TypeError`.
 2. **Path & Traceback Leakage**: API tests verify that internal exceptions containing sensitive host filesystem paths (e.g. `/Users/namanbhatt/...`) are strictly logged server-side and never returned in client HTTP 422 responses.
 3. **DOM XSS Injection**: The JSDOM suite asserts that hostile HTML tags injected via report fields are properly escaped into text nodes, with 0 `<script>`, `<img>`, or `<svg>` tags created in the live table bodies.
+

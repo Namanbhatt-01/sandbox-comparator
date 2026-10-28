@@ -55,3 +55,4 @@ Sandbox Comparator is engineered specifically for malware analysts and security 
 | :--- | :--- | :--- |
 | `1.0.x` (Local MVP) | :white_check_mark: | Active support and security updates |
 | `< 1.0.0` | :x: | Deprecated |
+

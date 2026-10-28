@@ -15,3 +15,4 @@
 - [ ] Parity verified between Python (`engine/`) and Rust (`rust/src/`).
 - [ ] No external CDNs, fonts, or network telemetry introduced.
 - [ ] RFC 6901 pointers maintained for all extracted findings.
+
