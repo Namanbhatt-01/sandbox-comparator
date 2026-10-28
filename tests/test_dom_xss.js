@@ -46,6 +46,25 @@ function runDomSecuritySuite() {
       unresolved_network: 0,
       total_limitations: 1
     },
+    analysis_summary: {
+      verdict: "CORROBORATED COMPROMISE<script>window.XSS_EXECUTED=true</script>",
+      text: "Compromise observed <img src=x onerror='window.XSS_EXECUTED=true'>"
+    },
+    investigation_findings: [
+      {
+        title: "Malicious Finding <script>window.XSS_EXECUTED=true</script>",
+        category: "EXECUTION\"><script>window.XSS_EXECUTED=true</script>",
+        severity: "CRITICAL\"><script>window.XSS_EXECUTED=true</script>",
+        detail: "Hostile detail <svg onload='window.XSS_EXECUTED=true'>"
+      }
+    ],
+    mitre_tactics: [
+      {
+        id: "TA0002<script>window.XSS_EXECUTED=true</script>",
+        name: "Execution <img src=x onerror='window.XSS_EXECUTED=true'>",
+        technique: "T1059 <svg onload='window.XSS_EXECUTED=true'>"
+      }
+    ],
     reconciled_processes: [
       {
         image: "bad_proc.exe\"><script>window.XSS_EXECUTED=true</script>",
@@ -140,8 +159,16 @@ function runDomSecuritySuite() {
   }
 
   // 2. Verify that NO unescaped <script>, <img>, <svg>, or rogue event handlers were injected as elements
-  const tables = ['tbody-procs', 'tbody-files', 'tbody-net', 'tbody-lims'];
-  for (const tid of tables) {
+  const containers = [
+    'tbody-procs',
+    'tbody-files',
+    'tbody-net',
+    'tbody-lims',
+    'analysis-card',
+    'investigation-findings-grid',
+    'analysis-mitre-chips'
+  ];
+  for (const tid of containers) {
     const el = document.getElementById(tid);
     if (!el) {
       throw new Error(`FAIL: Element #${tid} not found in DOM`);
@@ -207,7 +234,7 @@ function runDomSecuritySuite() {
     }
   }
 
-  console.log(`PASS: Browser-level DOM security suite verified across ${tables.length} tables and ${regLength} drawer evidence items (0 script executions, 0 injected elements, 0 rogue attributes).`);
+  console.log(`PASS: Browser-level DOM security suite verified across ${containers.length} containers and ${regLength} drawer evidence items (0 script executions, 0 injected elements, 0 rogue attributes).`);
 }
 
 try {

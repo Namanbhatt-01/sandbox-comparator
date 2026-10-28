@@ -242,7 +242,7 @@ Sandbox Comparator is built under an open-core, utility-first model:
 - **Professional Edition (Planned / ₹999/mo)**: Any.Run & Joe Sandbox native parsers; persistent SQLite workspace history; automated YARA/Sigma rule generation; executive PDF reports.
 - **Team & Enterprise (Planned / ₹4,999/mo)**: Private self-hosted sync layer; SOAR webhooks (Splunk Phantom, Cortex XSOAR); centralized cryptographically signed audit logs.
 
-For complete product specifications, compliance alignment (GDPR / HIPAA / SOC 2), and architectural guarantees, see [**PRODUCT_SPEC.md**](PRODUCT_SPEC.md).
+For complete product specifications, compliance alignment (GDPR / HIPAA / SOC 2), and architectural guarantees, see [**docs/PRODUCT_SPEC.md**](docs/PRODUCT_SPEC.md), [**docs/ARCHITECTURE.md**](docs/ARCHITECTURE.md), and [**docs/AIRGAP_SECURITY_MODEL.md**](docs/AIRGAP_SECURITY_MODEL.md).
 
 ---
 

@@ -108,12 +108,88 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     unresolved_files = sum(1 for f in files_out if f["observation_presence"] != "OBSERVED_IN_BOTH")
     matched_net = sum(1 for n in net_out if n["observation_presence"] == "OBSERVED_IN_BOTH")
     unresolved_net = sum(1 for n in net_out if n["observation_presence"] != "OBSERVED_IN_BOTH")
+    total_lims_count = sum(len(v) for v in limitations_out.values())
+
+    # Corelight-Style Epistemic Analysis Summary
+    if matched_procs > 0 and matched_files > 0:
+        verdict = "CORROBORATED COMPROMISE"
+        summary_text = (
+            f"Based on reconciled telemetry across both sandbox runs, there is high-confidence corroboration of "
+            f"core process execution and dropped file staging ({matched_procs} process node(s), {matched_files} dropped binary artifact(s))."
+        )
+    elif matched_procs > 0 or matched_files > 0:
+        verdict = "PARTIAL CORROBORATION"
+        summary_text = (
+            f"Partial behavioral alignment observed across reports. "
+            f"{matched_procs} process node(s) and {matched_files} file artifact(s) were observed in both runs."
+        )
+    else:
+        verdict = "DIVERGENT EXECUTION"
+        summary_text = "Divergent execution traces observed across reports with low cross-sandbox corroboration."
+
+    if unresolved_net > 0 and total_lims_count > 0:
+        summary_text += (
+            f" Omission of {unresolved_net} network socket(s) is partially explained by recorded environment limitations "
+            f"or egress filtering policies, rather than non-occurrence."
+        )
+    else:
+        summary_text += " No sandbox egress filtering or environment timeouts were recorded to explain discrepancies."
+
+    # Investigation Findings Cards
+    findings = []
+    if matched_procs > 0:
+        sample_procs = [p["image"] for p in procs_out if p["observation_presence"] == "OBSERVED_IN_BOTH"][:2]
+        proc_str = ", ".join(sample_procs) if sample_procs else "active processes"
+        findings.append({
+            "title": "Corroborated Process Execution",
+            "category": "EXECUTION",
+            "severity": "HIGH",
+            "detail": f"Corroborated execution chain of {proc_str} with consistent parent-child lineage."
+        })
+    if matched_files > 0:
+        findings.append({
+            "title": "Cryptographically Verified Artifacts",
+            "category": "PERSISTENCE",
+            "severity": "CRITICAL",
+            "detail": f"{matched_files} dropped payload(s) confirmed identical across distinct filesystem paths by SHA-256."
+        })
+    if matched_net > 0 or unresolved_net > 0:
+        findings.append({
+            "title": "Network Egress Telemetry",
+            "category": "COMMAND_AND_CONTROL",
+            "severity": "MEDIUM",
+            "detail": f"{matched_net} corroborated socket(s) recorded; {unresolved_net} uncorroborated connection(s) isolated."
+        })
+    if total_lims_count > 0:
+        findings.append({
+            "title": "Recorded Collection Limitations",
+            "category": "DEFENSE_EVASION",
+            "severity": "INFO",
+            "detail": f"{total_lims_count} environment warning(s) isolated (timeouts or egress policy enforcement)."
+        })
+
+    # MITRE ATT&CK Tactics Alignment
+    mitre_tactics = []
+    if procs_out:
+        mitre_tactics.append({"id": "TA0002", "name": "Execution", "technique": "T1059: Command and Scripting Interpreter"})
+    if files_out:
+        mitre_tactics.append({"id": "TA0003", "name": "Persistence", "technique": "T1547: Boot or Logon Autostart Execution"})
+    if net_out:
+        mitre_tactics.append({"id": "TA0011", "name": "Command & Control", "technique": "T1071: Application Layer Protocol"})
+    if limitations_out:
+        mitre_tactics.append({"id": "TA0005", "name": "Defense Evasion", "technique": "T1027: Environment Interception"})
 
     return {
         "sample_sha256": comparison.sample_sha256,
         "report_a_id": comparison.report_a_id,
         "report_b_id": comparison.report_b_id,
         "provenance_metadata": comparison.provenance_metadata,
+        "analysis_summary": {
+            "verdict": verdict,
+            "text": summary_text
+        },
+        "investigation_findings": findings,
+        "mitre_tactics": mitre_tactics,
         "reconciled_files": files_out,
         "reconciled_processes": procs_out,
         "reconciled_network": net_out,
@@ -125,7 +201,7 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
             "unresolved_files": unresolved_files,
             "matched_network": matched_net,
             "unresolved_network": unresolved_net,
-            "total_limitations": sum(len(v) for v in limitations_out.values())
+            "total_limitations": total_lims_count
         }
     }
 

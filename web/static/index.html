@@ -529,6 +529,169 @@
       border-top: 1px solid var(--border-color);
       margin-top: 40px;
     }
+
+    /* Corelight-Style Investigator Cards & Visuals */
+    .analysis-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+    .analysis-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .verdict-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .verdict-compromise {
+      background: var(--emerald-bg);
+      color: var(--emerald);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    .verdict-partial {
+      background: var(--amber-bg);
+      color: var(--amber);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+    .verdict-divergent {
+      background: var(--rose-bg);
+      color: var(--rose);
+      border: 1px solid rgba(244, 63, 94, 0.4);
+    }
+    .analysis-text {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text-main);
+      margin-bottom: 12px;
+    }
+    .mitre-chips-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .mitre-chip {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      color: var(--blue);
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .findings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .finding-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 0.15s ease;
+    }
+    .finding-card:hover {
+      border-color: var(--border-light);
+    }
+    .finding-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .finding-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .finding-detail {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .table-toolbar {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .table-search-input {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: var(--text-main);
+      padding: 6px 12px;
+      font-size: 12px;
+      width: 260px;
+    }
+    .table-search-input:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+    .filter-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-dim);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-btn:hover {
+      color: var(--text-main);
+      border-color: var(--border-light);
+    }
+    .filter-btn.filter-active {
+      background: var(--blue-bg);
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+    .history-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      color: var(--text-main);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: var(--font-sans);
+      cursor: pointer;
+    }
+    .history-select:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
   </style>
 </head>
 <body>
@@ -545,6 +708,8 @@
     <div class="header-badges">
       <div class="badge-offline">Local-Only (127.0.0.1)</div>
       <div class="brand-tag">Zero Outbound Telemetry</div>
+      <button id="btn-copy-summary" class="btn" onclick="copySummary()">&#128203; Copy Summary</button>
+      <button class="btn" onclick="exportJson()">&#128190; Export JSON</button>
       <button class="btn btn-primary" onclick="exportMarkdown()">Export Report (.md)</button>
     </div>
   </header>
@@ -563,7 +728,9 @@
       </div>
 
       <div class="upload-inline">
-        <span style="font-size: 12px; font-weight: 600; color: var(--text-dim);">CUSTOM RUN:</span>
+        <select id="history-select" class="history-select" onchange="loadSelectedHistory(this.value)">
+          <option value="">Recent Runs (0)</option>
+        </select>
         <div class="file-input-wrapper">
           <button class="btn">Upload 2 Reports...</button>
           <input type="file" id="file-uploader" multiple accept=".json" onchange="handleFileUpload(event)">
@@ -627,6 +794,42 @@
           <span id="metric-lims" style="color: var(--amber);">0</span>
           <span class="metric-sub">warnings detected</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Corelight-Style Executive Analysis Card -->
+    <div class="analysis-card" id="analysis-card">
+      <div class="analysis-header">
+        <div style="display:flex; align-items:center; gap: 10px;">
+          <span style="font-size: 11.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;">EXECUTIVE FORENSIC VERDICT:</span>
+          <span id="analysis-verdict-pill" class="verdict-tag verdict-compromise">ANALYZING...</span>
+        </div>
+        <div style="font-size: 11.5px; color: var(--text-dim);">Evidence-Aware Epistemic Grounding</div>
+      </div>
+      <div class="analysis-text" id="analysis-summary-text">
+        Loading synthesized multi-sandbox forensic consensus...
+      </div>
+      <div class="mitre-chips-container" id="analysis-mitre-chips">
+        <!-- MITRE ATT&CK Tactic Chips -->
+      </div>
+    </div>
+
+    <!-- Investigation Findings Grid -->
+    <div class="findings-grid" id="investigation-findings-grid">
+      <!-- High-density investigation cards rendered dynamically -->
+    </div>
+
+    <!-- Client-Side Live Table Toolbar -->
+    <div class="table-toolbar">
+      <div class="filter-btn-group">
+        <span style="font-size: 11.5px; font-weight: 600; color: var(--text-dim); margin-right: 4px;">FILTER ROWS:</span>
+        <button id="filter-btn-all" class="filter-btn filter-active" onclick="setFilterMode('all', this)">All Telemetry</button>
+        <button id="filter-btn-corroborated" class="filter-btn" onclick="setFilterMode('corroborated', this)">Corroborated Only</button>
+        <button id="filter-btn-single" class="filter-btn" onclick="setFilterMode('single', this)">Discrepancies Only</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span id="filter-row-count" style="font-size: 11.5px; color: var(--text-dim); font-family: var(--font-mono);"></span>
+        <input type="text" id="table-search" class="table-search-input" placeholder="Search processes, hashes, IPs, domains..." oninput="applyTableFilter()">
       </div>
     </div>
 
@@ -768,11 +971,14 @@
   <script>
     let currentComparison = null;
     let evidenceRegistry = [];
+    let currentFilterMode = 'all'; // 'all' | 'corroborated' | 'single'
     window.evidenceRegistry = evidenceRegistry;
 
     async function loadPreset(presetId) {
-      document.getElementById('btn-preset-y').classList.toggle('btn-active', presetId === 'scenario_y');
-      document.getElementById('btn-preset-x').classList.toggle('btn-active', presetId === 'scenario_x');
+      const btnY = document.getElementById('btn-preset-y');
+      const btnX = document.getElementById('btn-preset-x');
+      if (btnY) btnY.classList.toggle('btn-active', presetId === 'scenario_y');
+      if (btnX) btnX.classList.toggle('btn-active', presetId === 'scenario_x');
 
       try {
         const res = await fetch('/api/compare', {
@@ -827,198 +1033,331 @@
       window.evidenceRegistry = evidenceRegistry;
 
       // Banner
-      document.getElementById('banner-sha256').textContent = data.sample_sha256 || 'Unknown';
-      const metaA = data.provenance_metadata[data.report_a_id] || {};
-      const metaB = data.provenance_metadata[data.report_b_id] || {};
-      document.getElementById('banner-report-a').textContent = `${data.report_a_id} (${metaA.sandbox || 'Generic'})`;
-      document.getElementById('banner-report-b').textContent = `${data.report_b_id} (${metaB.sandbox || 'Generic'})`;
+      const elSha = document.getElementById('banner-sha256');
+      if (elSha) elSha.textContent = data.sample_sha256 || 'Unknown';
+      const metaA = (data.provenance_metadata && data.provenance_metadata[data.report_a_id]) || {};
+      const metaB = (data.provenance_metadata && data.provenance_metadata[data.report_b_id]) || {};
+      const elRepA = document.getElementById('banner-report-a');
+      const elRepB = document.getElementById('banner-report-b');
+      if (elRepA) elRepA.textContent = `${data.report_a_id} (${metaA.sandbox || 'Generic'})`;
+      if (elRepB) elRepB.textContent = `${data.report_b_id} (${metaB.sandbox || 'Generic'})`;
 
       const bannerFix = document.getElementById('banner-fixture-type');
       if (bannerFix) {
-        if (data.report_b_id.includes('falcon') || data.report_b_id.includes('approx')) {
+        if (data.report_b_id && (data.report_b_id.includes('falcon') || data.report_b_id.includes('approx'))) {
           bannerFix.textContent = 'Synthetic Approximation (Falcon schema) vs CAPE Fixture';
-        } else if (data.report_b_id.includes('sanitized') || data.report_b_id.includes('cape_run_2') || data.report_b_id.includes('v2.2')) {
+        } else if (data.report_b_id && (data.report_b_id.includes('sanitized') || data.report_b_id.includes('cape_run_2') || data.report_b_id.includes('v2.2'))) {
           bannerFix.textContent = 'Sanitized CAPE v2.2 Native Fixture vs CAPE Fixture';
         } else {
           bannerFix.textContent = 'User-Supplied Offline Reports';
         }
       }
 
+      // Executive Verdict & Analysis Summary
+      const verdictPill = document.getElementById('analysis-verdict-pill');
+      const summaryText = document.getElementById('analysis-summary-text');
+      if (verdictPill && data.analysis_summary) {
+        const v = data.analysis_summary.verdict || 'ANALYZED';
+        verdictPill.textContent = v;
+        verdictPill.className = 'verdict-tag ' + (
+          v.includes('COMPROMISE') ? 'verdict-compromise' :
+          (v.includes('PARTIAL') ? 'verdict-partial' : 'verdict-divergent')
+        );
+      }
+      if (summaryText && data.analysis_summary) {
+        summaryText.textContent = data.analysis_summary.text || 'No epistemic summary available.';
+      }
+
+      // MITRE ATT&CK Tactics Alignment Chips
+      const mitreContainer = document.getElementById('analysis-mitre-chips');
+      if (mitreContainer) {
+        if (data.mitre_tactics && data.mitre_tactics.length > 0) {
+          mitreContainer.innerHTML = data.mitre_tactics.map(m => 
+            `<span class="mitre-chip" title="${escapeHtml(m.technique)}"><strong>${escapeHtml(m.id)}</strong> ${escapeHtml(m.name)}: ${escapeHtml(m.technique)}</span>`
+          ).join('');
+        } else {
+          mitreContainer.innerHTML = '<span style="font-size:11.5px; color:var(--text-dim);">(No MITRE tactics mapped)</span>';
+        }
+      }
+
+      // High-Density Investigation Findings Cards
+      const findingsGrid = document.getElementById('investigation-findings-grid');
+      if (findingsGrid) {
+        if (data.investigation_findings && data.investigation_findings.length > 0) {
+          findingsGrid.innerHTML = data.investigation_findings.map(f => {
+            const sevPill = f.severity === 'CRITICAL' ? 'pill-rose' : (f.severity === 'HIGH' ? 'pill-amber' : (f.severity === 'MEDIUM' ? 'pill-blue' : 'pill-green'));
+            return `
+              <div class="finding-card">
+                <div class="finding-top">
+                  <span class="finding-title">${escapeHtml(f.title)}</span>
+                  <span class="pill ${sevPill}">${escapeHtml(f.severity)}</span>
+                </div>
+                <div class="finding-detail">${escapeHtml(f.detail)}</div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          findingsGrid.innerHTML = '';
+        }
+      }
+
       // Metrics
-      document.getElementById('metric-procs-matched').textContent = data.metrics.matched_processes;
-      document.getElementById('metric-procs-total').textContent = data.reconciled_processes.length;
-      document.getElementById('metric-files-matched').textContent = data.metrics.matched_files;
-      document.getElementById('metric-files-total').textContent = data.reconciled_files.length;
-      document.getElementById('metric-net-matched').textContent = data.metrics.matched_network;
-      document.getElementById('metric-lims').textContent = data.metrics.total_limitations;
+      const mProcsM = document.getElementById('metric-procs-matched');
+      const mProcsT = document.getElementById('metric-procs-total');
+      const mFilesM = document.getElementById('metric-files-matched');
+      const mFilesT = document.getElementById('metric-files-total');
+      const mNetM = document.getElementById('metric-net-matched');
+      const mLims = document.getElementById('metric-lims');
+
+      if (mProcsM && data.metrics) mProcsM.textContent = data.metrics.matched_processes;
+      if (mProcsT && data.reconciled_processes) mProcsT.textContent = data.reconciled_processes.length;
+      if (mFilesM && data.metrics) mFilesM.textContent = data.metrics.matched_files;
+      if (mFilesT && data.reconciled_files) mFilesT.textContent = data.reconciled_files.length;
+      if (mNetM && data.metrics) mNetM.textContent = data.metrics.matched_network;
+      if (mLims && data.metrics) mLims.textContent = data.metrics.total_limitations;
 
       // Tab Counters
-      document.getElementById('tab-cnt-procs').textContent = data.reconciled_processes.length;
-      document.getElementById('tab-cnt-files').textContent = data.reconciled_files.length;
-      document.getElementById('tab-cnt-net').textContent = data.reconciled_network.length;
+      const tcProcs = document.getElementById('tab-cnt-procs');
+      const tcFiles = document.getElementById('tab-cnt-files');
+      const tcNet = document.getElementById('tab-cnt-net');
+      const tcLims = document.getElementById('tab-cnt-lims');
+
+      if (tcProcs && data.reconciled_processes) tcProcs.textContent = data.reconciled_processes.length;
+      if (tcFiles && data.reconciled_files) tcFiles.textContent = data.reconciled_files.length;
+      if (tcNet && data.reconciled_network) tcNet.textContent = data.reconciled_network.length;
       let totalLims = 0;
-      Object.values(data.collection_limitations).forEach(l => totalLims += l.length);
-      document.getElementById('tab-cnt-lims').textContent = totalLims;
+      if (data.collection_limitations) {
+        Object.values(data.collection_limitations).forEach(l => totalLims += (l ? l.length : 0));
+      }
+      if (tcLims) tcLims.textContent = totalLims;
 
       // Render Processes
       const tbodyProcs = document.getElementById('tbody-procs');
-      tbodyProcs.innerHTML = '';
-      data.reconciled_processes.forEach((p, idx) => {
-        const tr = document.createElement('tr');
-        const presencePill = p.observation_presence === 'OBSERVED_IN_BOTH' 
-          ? '<span class="pill pill-green">CORROBORATED</span>'
-          : '<span class="pill pill-rose">SINGLE REPORT</span>';
-        
-        const confPill = p.confidence === 'MATCHED'
-          ? '<span class="pill pill-green">MATCHED</span>'
-          : (p.confidence === 'POSSIBLE_MATCH' ? '<span class="pill pill-amber">AMBIGUOUS</span>' : '<span class="pill pill-rose">UNRESOLVED</span>');
+      if (tbodyProcs && data.reconciled_processes) {
+        tbodyProcs.innerHTML = '';
+        data.reconciled_processes.forEach((p, idx) => {
+          const tr = document.createElement('tr');
+          const presencePill = p.observation_presence === 'OBSERVED_IN_BOTH' 
+            ? '<span class="pill pill-green">CORROBORATED</span>'
+            : '<span class="pill pill-rose">SINGLE REPORT</span>';
+          
+          const confPill = p.confidence === 'MATCHED'
+            ? '<span class="pill pill-green">MATCHED</span>'
+            : (p.confidence === 'POSSIBLE_MATCH' ? '<span class="pill pill-amber">AMBIGUOUS</span>' : '<span class="pill pill-rose">UNRESOLVED</span>');
 
-        const scorePct = Math.round(p.heuristic_similarity_score * 100);
-        const scoreColor = scorePct >= 80 ? 'var(--emerald)' : (scorePct >= 45 ? 'var(--amber)' : 'var(--text-dim)');
+          const scorePct = Math.round((p.heuristic_similarity_score || 0) * 100);
+          const scoreColor = scorePct >= 80 ? 'var(--emerald)' : (scorePct >= 45 ? 'var(--amber)' : 'var(--text-dim)');
 
-        const pidA = (p.pids && p.pids[data.report_a_id] !== undefined) ? escapeHtml(p.pids[data.report_a_id]) : '-';
-        const pidB = (p.pids && p.pids[data.report_b_id] !== undefined) ? escapeHtml(p.pids[data.report_b_id]) : '-';
+          const pidA = (p.pids && p.pids[data.report_a_id] !== undefined) ? escapeHtml(p.pids[data.report_a_id]) : '-';
+          const pidB = (p.pids && p.pids[data.report_b_id] !== undefined) ? escapeHtml(p.pids[data.report_b_id]) : '-';
 
-        let ptrHtml = '';
-        Object.entries(p.evidence_pointers).forEach(([rep, ptr]) => {
-          if (ptr && ptr.is_available) {
-            const evIdx = evidenceRegistry.length;
-            evidenceRegistry.push({
-              title: p.image_name || p.image || 'Unknown Process',
-              pointer: ptr.json_pointer,
-              summary: ptr.event_summary,
-              epistemic: p.epistemic_interpretation,
-              snippet: ptr.raw_snippet
+          let ptrHtml = '';
+          if (p.evidence_pointers) {
+            Object.entries(p.evidence_pointers).forEach(([rep, ptr]) => {
+              if (ptr && ptr.is_available) {
+                const evIdx = evidenceRegistry.length;
+                evidenceRegistry.push({
+                  title: p.image_name || p.image || 'Unknown Process',
+                  pointer: ptr.json_pointer,
+                  summary: ptr.event_summary,
+                  epistemic: p.epistemic_interpretation,
+                  snippet: ptr.raw_snippet
+                });
+                ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
+              }
             });
-            ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
           }
+
+          const lineageSafe = (p.lineage_path || []).map(escapeHtml).join(' &rarr; ');
+
+          tr.innerHTML = `
+            <td>
+              <div style="font-weight:600;">${escapeHtml(p.image_name || p.image || 'Unknown Process')}</div>
+              <div class="mono" style="font-size: 11px; color: var(--text-dim);">${lineageSafe}</div>
+            </td>
+            <td>${presencePill}</td>
+            <td>${confPill}</td>
+            <td>
+              <div class="score-meter">
+                <span style="color:${scoreColor}">${scorePct}%</span>
+                <div class="meter-bar"><div class="meter-fill" style="width:${scorePct}%; background:${scoreColor};"></div></div>
+              </div>
+            </td>
+            <td class="mono">${pidA}</td>
+            <td class="mono">${pidB}</td>
+            <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
+          `;
+          tbodyProcs.appendChild(tr);
         });
-
-        const lineageSafe = (p.lineage_path || []).map(escapeHtml).join(' &rarr; ');
-
-        tr.innerHTML = `
-          <td>
-            <div style="font-weight:600;">${escapeHtml(p.image_name || p.image || 'Unknown Process')}</div>
-            <div class="mono" style="font-size: 11px; color: var(--text-dim);">${lineageSafe}</div>
-          </td>
-          <td>${presencePill}</td>
-          <td>${confPill}</td>
-          <td>
-            <div class="score-meter">
-              <span style="color:${scoreColor}">${scorePct}%</span>
-              <div class="meter-bar"><div class="meter-fill" style="width:${scorePct}%; background:${scoreColor};"></div></div>
-            </div>
-          </td>
-          <td class="mono">${pidA}</td>
-          <td class="mono">${pidB}</td>
-          <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
-        `;
-        tbodyProcs.appendChild(tr);
-      });
+      }
 
       // Render Files
       const tbodyFiles = document.getElementById('tbody-files');
-      tbodyFiles.innerHTML = '';
-      data.reconciled_files.forEach(f => {
-        const tr = document.createElement('tr');
-        const presencePill = f.observation_presence === 'OBSERVED_IN_BOTH'
-          ? '<span class="pill pill-green">CORROBORATED</span>'
-          : '<span class="pill pill-rose">SINGLE REPORT</span>';
+      if (tbodyFiles && data.reconciled_files) {
+        tbodyFiles.innerHTML = '';
+        data.reconciled_files.forEach(f => {
+          const tr = document.createElement('tr');
+          const presencePill = f.observation_presence === 'OBSERVED_IN_BOTH'
+            ? '<span class="pill pill-green">CORROBORATED</span>'
+            : '<span class="pill pill-rose">SINGLE REPORT</span>';
 
-        const rawNameA = f.filenames ? f.filenames[data.report_a_id] : null;
-        const rawNameB = f.filenames ? f.filenames[data.report_b_id] : null;
-        const nameA = rawNameA ? escapeHtml(rawNameA) : '<span style="color:var(--text-dim)">(none)</span>';
-        const nameB = rawNameB ? escapeHtml(rawNameB) : '<span style="color:var(--text-dim)">(none)</span>';
+          const rawNameA = f.filenames ? f.filenames[data.report_a_id] : null;
+          const rawNameB = f.filenames ? f.filenames[data.report_b_id] : null;
+          const nameA = rawNameA ? escapeHtml(rawNameA) : '<span style="color:var(--text-dim)">(none)</span>';
+          const nameB = rawNameB ? escapeHtml(rawNameB) : '<span style="color:var(--text-dim)">(none)</span>';
 
-        let ptrHtml = '';
-        Object.entries(f.evidence_pointers).forEach(([rep, ptr]) => {
-          if (ptr && ptr.is_available) {
-            const evIdx = evidenceRegistry.length;
-            evidenceRegistry.push({
-              title: f.sha256 ? f.sha256.substring(0, 16) : 'File',
-              pointer: ptr.json_pointer,
-              summary: ptr.event_summary,
-              epistemic: f.epistemic_interpretation,
-              snippet: ptr.raw_snippet
+          let ptrHtml = '';
+          if (f.evidence_pointers) {
+            Object.entries(f.evidence_pointers).forEach(([rep, ptr]) => {
+              if (ptr && ptr.is_available) {
+                const evIdx = evidenceRegistry.length;
+                evidenceRegistry.push({
+                  title: f.sha256 ? f.sha256.substring(0, 16) : 'File',
+                  pointer: ptr.json_pointer,
+                  summary: ptr.event_summary,
+                  epistemic: f.epistemic_interpretation,
+                  snippet: ptr.raw_snippet
+                });
+                ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
+              }
             });
-            ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
           }
+
+          const shortHash = f.sha256 ? escapeHtml(f.sha256.substring(0, 16)) : 'Unknown';
+
+          tr.innerHTML = `
+            <td class="mono" style="font-size:12px;">${shortHash}...</td>
+            <td>${presencePill}</td>
+            <td><span class="pill pill-blue">${escapeHtml(f.causal_explanation)}</span></td>
+            <td>${nameA}</td>
+            <td>${nameB}</td>
+            <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
+          `;
+          tbodyFiles.appendChild(tr);
         });
-
-        const shortHash = f.sha256 ? escapeHtml(f.sha256.substring(0, 16)) : 'Unknown';
-
-        tr.innerHTML = `
-          <td class="mono" style="font-size:12px;">${shortHash}...</td>
-          <td>${presencePill}</td>
-          <td><span class="pill pill-blue">${escapeHtml(f.causal_explanation)}</span></td>
-          <td>${nameA}</td>
-          <td>${nameB}</td>
-          <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
-        `;
-        tbodyFiles.appendChild(tr);
-      });
+      }
 
       // Render Network
       const tbodyNet = document.getElementById('tbody-net');
-      tbodyNet.innerHTML = '';
-      data.reconciled_network.forEach(n => {
-        const tr = document.createElement('tr');
-        const presencePill = n.observation_presence === 'OBSERVED_IN_BOTH'
-          ? '<span class="pill pill-green">OBSERVED IN BOTH</span>'
-          : '<span class="pill pill-rose">OBSERVED IN ONE</span>';
+      if (tbodyNet && data.reconciled_network) {
+        tbodyNet.innerHTML = '';
+        data.reconciled_network.forEach(n => {
+          const tr = document.createElement('tr');
+          const presencePill = n.observation_presence === 'OBSERVED_IN_BOTH'
+            ? '<span class="pill pill-green">OBSERVED IN BOTH</span>'
+            : '<span class="pill pill-rose">OBSERVED IN ONE</span>';
 
-        const statePill = `<span class="pill pill-purple">${escapeHtml(n.connection_state)}</span>`;
-        const causalPill = `<span class="pill pill-blue">${escapeHtml(n.causal_status)}</span>`;
+          const statePill = `<span class="pill pill-purple">${escapeHtml(n.connection_state)}</span>`;
+          const causalPill = `<span class="pill pill-blue">${escapeHtml(n.causal_status)}</span>`;
 
-        let ptrHtml = '';
-        Object.entries(n.evidence_pointers).forEach(([rep, ptr]) => {
-          if (ptr && ptr.is_available) {
-            const evIdx = evidenceRegistry.length;
-            evidenceRegistry.push({
-              title: n.connection,
-              pointer: ptr.json_pointer,
-              summary: ptr.event_summary,
-              epistemic: n.epistemic_interpretation,
-              snippet: ptr.raw_snippet
+          let ptrHtml = '';
+          if (n.evidence_pointers) {
+            Object.entries(n.evidence_pointers).forEach(([rep, ptr]) => {
+              if (ptr && ptr.is_available) {
+                const evIdx = evidenceRegistry.length;
+                evidenceRegistry.push({
+                  title: n.connection,
+                  pointer: ptr.json_pointer,
+                  summary: ptr.event_summary,
+                  epistemic: n.epistemic_interpretation,
+                  snippet: ptr.raw_snippet
+                });
+                ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
+              }
             });
-            ptrHtml += `<div><a class="pointer-link" onclick="openEvidenceByIndex(${evIdx})">&#128269; ${escapeHtml(ptr.json_pointer)}</a></div>`;
           }
-        });
 
-        tr.innerHTML = `
-          <td class="mono" style="font-weight:600; color: var(--blue);">${escapeHtml(n.connection)}</td>
-          <td>${statePill}</td>
-          <td>${presencePill}</td>
-          <td>${causalPill}</td>
-          <td style="font-size:12px;">${n.policy_record ? '<span class="pill pill-amber">' + escapeHtml(n.policy_record) + '</span>' : '<span style="color:var(--text-dim)">(None)</span>'}</td>
-          <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
-        `;
-        tbodyNet.appendChild(tr);
-      });
+          tr.innerHTML = `
+            <td class="mono" style="font-weight:600; color: var(--blue);">${escapeHtml(n.connection)}</td>
+            <td>${statePill}</td>
+            <td>${presencePill}</td>
+            <td>${causalPill}</td>
+            <td style="font-size:12px;">${n.policy_record ? '<span class="pill pill-amber">' + escapeHtml(n.policy_record) + '</span>' : '<span style="color:var(--text-dim)">(None)</span>'}</td>
+            <td>${ptrHtml || '<span style="color:var(--text-dim)">None</span>'}</td>
+          `;
+          tbodyNet.appendChild(tr);
+        });
+      }
 
       // Render Limitations
       const tbodyLims = document.getElementById('tbody-lims');
-      tbodyLims.innerHTML = '';
-      Object.entries(data.collection_limitations).forEach(([rep, lims]) => {
-        lims.forEach(l => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td class="mono" style="font-weight:600;">${escapeHtml(rep)}</td>
-            <td><span class="pill pill-amber">${escapeHtml(l.code)}</span></td>
-            <td><span class="pill pill-purple">${escapeHtml(l.category)}</span></td>
-            <td>${escapeHtml(l.description)}</td>
-            <td class="mono">${escapeHtml(l.target_pattern || 'None')}</td>
-          `;
-          tbodyLims.appendChild(tr);
+      if (tbodyLims && data.collection_limitations) {
+        tbodyLims.innerHTML = '';
+        Object.entries(data.collection_limitations).forEach(([rep, lims]) => {
+          if (lims) {
+            lims.forEach(l => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `
+                <td class="mono" style="font-weight:600;">${escapeHtml(rep)}</td>
+                <td><span class="pill pill-amber">${escapeHtml(l.code)}</span></td>
+                <td><span class="pill pill-purple">${escapeHtml(l.category)}</span></td>
+                <td>${escapeHtml(l.description)}</td>
+                <td class="mono">${escapeHtml(l.target_pattern || 'None')}</td>
+              `;
+              tbodyLims.appendChild(tr);
+            });
+          }
         });
-      });
+      }
+
+      // Save to local storage history & apply filters
+      saveSessionToHistory(data);
+      applyTableFilter();
     }
 
     function switchTab(tabId, btn) {
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
       document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-      document.getElementById(tabId).style.display = 'block';
-      btn.classList.add('active');
+      const target = document.getElementById(tabId);
+      if (target) target.style.display = 'block';
+      if (btn) btn.classList.add('active');
+      applyTableFilter();
+    }
+
+    function setFilterMode(mode, btn) {
+      currentFilterMode = mode;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('filter-active'));
+      if (btn) btn.classList.add('filter-active');
+      applyTableFilter();
+    }
+
+    function applyTableFilter() {
+      const searchEl = document.getElementById('table-search');
+      const query = (searchEl ? searchEl.value : '').toLowerCase().trim();
+      const activeTab = document.querySelector('.tab-content:not([style*="display: none"]):not([style*="display:none"])');
+      if (!activeTab) return;
+      const tbody = activeTab.querySelector('tbody');
+      if (!tbody) return;
+
+      const rows = tbody.querySelectorAll('tr');
+      let visibleCount = 0;
+      let totalCount = 0;
+
+      rows.forEach(tr => {
+        if (tr.querySelector('td[colspan]')) return;
+        totalCount++;
+        const text = tr.textContent.toLowerCase();
+        const matchesQuery = !query || text.includes(query);
+
+        let matchesPresence = true;
+        if (currentFilterMode === 'corroborated') {
+          matchesPresence = text.includes('corroborated') || text.includes('observed in both') || text.includes('matched');
+        } else if (currentFilterMode === 'single') {
+          matchesPresence = text.includes('single report') || text.includes('observed in one') || text.includes('unresolved') || text.includes('ambiguous');
+        }
+
+        if (matchesQuery && matchesPresence) {
+          tr.style.display = '';
+          visibleCount++;
+        } else {
+          tr.style.display = 'none';
+        }
+      });
+
+      const countBadge = document.getElementById('filter-row-count');
+      if (countBadge) {
+        countBadge.textContent = `${visibleCount}/${totalCount} visible`;
+      }
     }
 
     function openEvidenceByIndex(idx) {
@@ -1051,8 +1390,119 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `sandbox_comparison_${currentComparison.sample_sha256.substring(0, 12)}.md`;
+      a.download = `sandbox_comparison_${(currentComparison.sample_sha256 || 'export').substring(0, 12)}.md`;
       a.click();
+    }
+
+    function exportJson() {
+      if (!currentComparison) {
+        alert("No comparison data available to export.");
+        return;
+      }
+      const blob = new Blob([JSON.stringify(currentComparison, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sandbox_comparison_${(currentComparison.sample_sha256 || 'export').substring(0, 12)}.json`;
+      a.click();
+    }
+
+    async function copySummary() {
+      if (!currentComparison) {
+        alert("No comparison data available to copy.");
+        return;
+      }
+      const verdict = (currentComparison.analysis_summary && currentComparison.analysis_summary.verdict) || 'N/A';
+      const text = (currentComparison.analysis_summary && currentComparison.analysis_summary.text) || '';
+      const sha = currentComparison.sample_sha256 || 'Unknown';
+      const procs = `${currentComparison.metrics ? currentComparison.metrics.matched_processes : 0}/${(currentComparison.reconciled_processes || []).length}`;
+      const files = `${currentComparison.metrics ? currentComparison.metrics.matched_files : 0}/${(currentComparison.reconciled_files || []).length}`;
+      const net = currentComparison.metrics ? currentComparison.metrics.matched_network : 0;
+      const lims = currentComparison.metrics ? currentComparison.metrics.total_limitations : 0;
+
+      const clipText = [
+        `=== Sandbox Comparator Executive Summary ===`,
+        `Sample SHA-256: ${sha}`,
+        `Verdict: ${verdict}`,
+        `Corroborated Processes: ${procs}`,
+        `Corroborated Files: ${files}`,
+        `Corroborated Network: ${net}`,
+        `Recorded Limitations: ${lims}`,
+        `\nAnalysis:`,
+        text
+      ].join('\n');
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(clipText);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = clipText;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        const btn = document.getElementById('btn-copy-summary');
+        if (btn) {
+          const orig = btn.innerHTML;
+          btn.innerHTML = '&#10003; Copied!';
+          setTimeout(() => { btn.innerHTML = orig; }, 2000);
+        }
+      } catch (err) {
+        alert("Failed to copy summary: " + err);
+      }
+    }
+
+    function saveSessionToHistory(data) {
+      try {
+        const key = 'sc_recent_comparisons';
+        let history = JSON.parse(localStorage.getItem(key) || '[]');
+        const item = {
+          id: Date.now().toString(),
+          sha256: data.sample_sha256 || 'Unknown',
+          report_a_id: data.report_a_id,
+          report_b_id: data.report_b_id,
+          verdict: (data.analysis_summary && data.analysis_summary.verdict) || 'ANALYZED',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          data: data
+        };
+        history = history.filter(h => !(h.sha256 === item.sha256 && h.report_a_id === item.report_a_id && h.report_b_id === item.report_b_id));
+        history.unshift(item);
+        if (history.length > 5) history.pop();
+        localStorage.setItem(key, JSON.stringify(history));
+        updateHistoryDropdown();
+      } catch (e) {
+        // Safe fallback if local storage is restricted
+      }
+    }
+
+    function updateHistoryDropdown() {
+      const sel = document.getElementById('history-select');
+      if (!sel) return;
+      try {
+        const history = JSON.parse(localStorage.getItem('sc_recent_comparisons') || '[]');
+        sel.innerHTML = `<option value="">Recent Runs (${history.length})</option>`;
+        history.forEach((h, i) => {
+          const opt = document.createElement('option');
+          opt.value = i.toString();
+          opt.textContent = `${h.timestamp} - ${h.sha256.substring(0, 8)}... [${h.verdict}]`;
+          sel.appendChild(opt);
+        });
+      } catch (e) {}
+    }
+
+    function loadSelectedHistory(indexStr) {
+      if (indexStr === "") return;
+      try {
+        const history = JSON.parse(localStorage.getItem('sc_recent_comparisons') || '[]');
+        const idx = parseInt(indexStr, 10);
+        if (history[idx] && history[idx].data) {
+          renderComparison(history[idx].data);
+        }
+      } catch (e) {
+        alert("Failed to load history item: " + e);
+      }
     }
 
     function escapeHtml(str) {
@@ -1067,6 +1517,7 @@
 
     // Auto-load default scenario on start
     window.addEventListener('DOMContentLoaded', () => {
+      updateHistoryDropdown();
       loadPreset('scenario_y');
     });
   </script>

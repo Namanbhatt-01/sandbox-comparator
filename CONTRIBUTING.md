@@ -106,5 +106,5 @@ To add support for a new sandbox format (e.g. Any.Run, Joe Sandbox, Hatching Tri
    - `feat(engine): add Any.Run export parser`
    - `fix(web): prevent potential DOM injection in table cell`
 3. **CI Requirement**: All GitHub Actions matrix checks (Python 3.9, 3.10, 3.11, 3.12, Rust, DOM tests) must pass with green checkmarks.
-4. **Documentation**: Update `README.md`, `PRODUCT_SPEC.md`, or `CHANGELOG.md` if your change affects public APIs, CLI flags, or schema models.
+4. **Documentation**: Update `README.md`, `docs/`, or `CHANGELOG.md` if your change affects public APIs, CLI flags, or schema models.
 

@@ -23,6 +23,36 @@ def format_markdown_report(comparison, vt_eval=None) -> str:
     lines.append(f"- **Report A**: `{comparison.report_a_id}` ({meta_a.get('sandbox')}) — Provenance: `{meta_a.get('provenance_type')}`")
     lines.append(f"- **Report B**: `{comparison.report_b_id}` ({meta_b.get('sandbox')}) — Provenance: `{meta_b.get('provenance_type')}`\n")
 
+    matched_procs = sum(1 for p in comparison.reconciled_processes if p.observation_presence.value == "OBSERVED_IN_BOTH")
+    matched_files = sum(1 for f in comparison.reconciled_files if f.observation_presence.value == "OBSERVED_IN_BOTH")
+    unresolved_net = sum(1 for n in comparison.reconciled_network if n.observation_presence.value != "OBSERVED_IN_BOTH")
+    total_lims = sum(len(v) for v in comparison.collection_limitations.values())
+
+    if matched_procs > 0 and matched_files > 0:
+        verdict = "CORROBORATED COMPROMISE"
+        summary_text = (
+            f"High-confidence corroboration of core process execution and dropped file staging "
+            f"across both sandbox environments ({matched_procs} process node(s), {matched_files} dropped binary artifact(s))."
+        )
+    elif matched_procs > 0 or matched_files > 0:
+        verdict = "PARTIAL CORROBORATION"
+        summary_text = (
+            f"Partial behavioral alignment observed across reports. "
+            f"{matched_procs} process node(s) and {matched_files} file artifact(s) were observed in both runs."
+        )
+    else:
+        verdict = "DIVERGENT EXECUTION"
+        summary_text = "Divergent execution traces observed across reports with low cross-sandbox corroboration."
+
+    if unresolved_net > 0 and total_lims > 0:
+        summary_text += (
+            f" Omission of {unresolved_net} network socket(s) is partially explained by recorded environment limitations "
+            f"or egress filtering policies, rather than non-occurrence."
+        )
+
+    lines.append(f"## Executive Forensic Verdict: `{verdict}`")
+    lines.append(f"> **Analysis Summary**: {summary_text}\n")
+
     lines.append("## 1. Dropped Files Reconciliation (Disentangled Presence & Explanation)")
     lines.append("| SHA-256 | Observation Presence | Causal Explanation | Filename in A | Filename in B | RFC 6901 Evidence Pointers |")
     lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
