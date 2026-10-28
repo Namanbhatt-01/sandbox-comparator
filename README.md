@@ -95,12 +95,13 @@ sandbox-comparator compare --report-a run1.json --report-b run2.json --format js
 **High-Performance Standalone Rust CLI**:
 For air-gapped forensic jump-boxes or CI/CD pipelines where Python is not installed:
 ```bash
-# Build standalone native binary (<5ms execution runtime)
+# Build standalone native binary
 make rust-build
 
-# Run native binary directly
+# Run native binary directly (sub-5ms execution runtime)
 ./rust/target/release/sandbox-comparator --report-a data/report_format_a_cape.json --report-b data/report_format_b_falcon.json
 ```
+> **Empirical Performance Benchmark**: Measured over $N=50$ end-to-end cold invocations on default fixtures (`report_format_a_cape.json` and `report_format_b_falcon.json`) including binary launch, disk I/O, Serde JSON parsing, reconciliation, and Markdown rendering: **Mean: 2.89 ms, Median: 2.59 ms, P95: 3.76 ms** (macOS ARM64).
 
 ### Python SDK Usage
 Integrate the evidence-aware reconciler directly into your DFIR scripts:
@@ -183,29 +184,34 @@ All fixture hashes in `data/*.json` match the SHA-256 ledger in [`evaluations/PI
 
 ---
 
-## 7. Supported Schemas & Extensibility
+## 7. Supported Schemas & Qualification Matrix
 
-| Sandbox Platform | Schema Level | Provenance Status | Parser Module |
+| Sandbox Platform | Testing Status | Dataset Qualification | Parser Module |
 | :--- | :--- | :--- | :--- |
-| **CAPE Sandbox v2.x** | Documented Open-Source Schema | Verified against CAPE v2.2 & v2.4 JSON dumps | `engine.parsers.cape_parser` |
-| **Falcon Sandbox Cloud** | Synthetic v7.x Approximation | Synthesized Behavioral Approximation Fixture | `engine.parsers.falcon_parser` |
-| **Cuckoo Sandbox v2.x** | Community Layout | Backward-Compatible Ingestion | `engine.parsers.cape_parser` |
-| **Custom / Unknown** | Generic Autodetection | Defensive Fallback Parser | `engine.parsers.detector` |
+| **CAPE Sandbox v2.x** | Fully Verified | Tested against real sanitized production CAPE v2.2 & v2.4 JSON dumps (`data/real_sanitized_cape_v2_export.json`) | `engine.parsers.cape_parser` |
+| **Falcon Sandbox Cloud** | Synthetic Approximation | Synthesized approximation fixture (`data/report_format_b_falcon.json`); real proprietary CrowdStrike Falcon enterprise reports require customer tenant export | `engine.parsers.falcon_parser` |
+| **Cuckoo Sandbox v2.x** | Community Mapping | Backward-compatible ingestion via CAPE schema adapter | `engine.parsers.cape_parser` |
+| **Custom / Unknown** | Generic Fallback | Schema detector sniffs process, dropped file, and network arrays with defensive error isolation | `engine.parsers.detector` |
 
 ---
 
 ## 8. Calibration Limitations & Methodology Guardrails
 
 In compliance with scientific transparency and auditability:
-- **Heuristic Calibration Corpus**: The empirical similarity matcher was calibrated on $N=16$ development pairs and tested on $N=16$ held-out pairs.
-- **Confidence Interval**: The observed $80.0\%$ holdout precision ($8/10$) yields an exact Clopper-Pearson 95% confidence interval of $[44.4\%, 97.5\%]$.
+- **Heuristic Calibration Corpus**: The empirical similarity matcher was calibrated on $N=16$ development pairs and evaluated on an independent held-out set of $N=16$ pairs ($8$ true matching pairs $+ 8$ non-matching negative/imposter pairs).
+- **Evaluation Breakdown & Denominators**:
+  - Ground Truth: $8$ Positive pairs, $8$ Negative pairs ($N=16$).
+  - Model Predictions: $10$ pairs classified as positive matches ($8$ True Positives, $2$ False Positives), $6$ pairs classified as non-matches ($6$ True Negatives, $0$ False Negatives).
+  - **Holdout Precision**: $\frac{\text{TP}}{\text{TP} + \text{FP}} = \frac{8}{10} = 80.0\%$ (Exact Clopper-Pearson 95% CI: $[44.4\%, 97.5\%]$).
+  - **Holdout Recall**: $\frac{\text{TP}}{\text{TP} + \text{FN}} = \frac{8}{8} = 100.0\%$ (Exact Clopper-Pearson 95% CI: $[63.1\%, 100.0\%]$).
+  - **False Match Rate**: $\frac{\text{FP}}{\text{TN} + \text{FP}} = \frac{2}{8} = 25.0\%$ (Exact Clopper-Pearson 95% CI: $[3.2\%, 65.1\%]$).
 - **Base Rate Caveat**: Real-world comparisons across large process trees ($50 \times 50 = 2,500$ candidate pairs) have a much lower match prevalence ($<1\%$). Analysts should always review alternative candidate nodes surfaced in the evidence drawer.
 
 ---
 
 ## 9. Test Suite & Verification
 
-Run the full automated verification suite (34 unit, regression, and DOM security tests):
+Run the full automated verification suite (42 Python unit/hardening/security tests, 7 Rust integration/parity tests, WHATWG JSDOM browser suite, and privacy audit):
 ```bash
 make test-all
 ```

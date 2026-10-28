@@ -4,7 +4,7 @@ help:
 	@echo "Sandbox Comparator — Product Developer Commands"
 	@echo "==============================================="
 	@echo "  make install       Install Python dependencies"
-	@echo "  make test          Run the complete 34-test Python and DOM security verification suite"
+	@echo "  make test          Run the complete Python test suite (42 unit, hardening, and security tests)"
 	@echo "  make dom-test      Run the browser-level WHATWG DOM XSS regression suite (Node/JSDOM)"
 	@echo "  make audit-privacy Verify offline zero-egress compliance and local font/asset integrity"
 	@echo "  make rust-build    Build the standalone high-performance Rust core CLI"
