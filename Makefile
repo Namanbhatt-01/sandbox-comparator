@@ -20,10 +20,10 @@ install:
 	pip install -e .
 
 test:
-	python3 -m unittest discover -s . -p "test_*.py"
+	python3 -m unittest discover -s tests -p "test_*.py"
 
 dom-test:
-	node test_dom_xss.js
+	node tests/test_dom_xss.js
 
 audit-privacy:
 	python3 scripts/verify_offline_privacy.py

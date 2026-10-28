@@ -39,7 +39,7 @@ jobs:
 
     - name: Run browser DOM XSS suite
       run: |
-        node test_dom_xss.js
+        node tests/test_dom_xss.js
 
     - name: Verify offline privacy and zero-egress compliance
       run: |
@@ -47,7 +47,7 @@ jobs:
 
     - name: Run unit & regression test suite (34 tests)
       run: |
-        python -m unittest discover -s . -p "test_*.py"
+        python -m unittest discover -s tests -p "test_*.py"
 
     - name: Test CLI invocation
       run: |

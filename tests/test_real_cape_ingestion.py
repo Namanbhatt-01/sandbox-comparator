@@ -17,7 +17,8 @@ from engine.provenance import resolve_json_pointer
 
 class TestRealCapeIngestion(unittest.TestCase):
     def setUp(self):
-        base_dir = Path(__file__).resolve().parent
+        parent_dir = Path(__file__).resolve().parent
+        base_dir = parent_dir.parent if (parent_dir.parent / "data").exists() else parent_dir
         fixture_path = base_dir / "data/real_sanitized_cape_v2_export.json"
         with open(fixture_path, "r") as f:
             self.raw_cape = json.load(f)

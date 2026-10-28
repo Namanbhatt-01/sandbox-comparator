@@ -31,7 +31,8 @@ from engine.timing_benchmark import ExecutionBenchmark
 class TestHoldoutAndProvenance(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        base_dir = Path(__file__).resolve().parent
+        parent_dir = Path(__file__).resolve().parent
+        base_dir = parent_dir.parent if (parent_dir.parent / "data").exists() else parent_dir
         with open(base_dir / "data/report_format_a_cape.json", "r") as f:
             cls.raw_cape = json.load(f)
         with open(base_dir / "data/report_format_b_falcon.json", "r") as f:

@@ -14,13 +14,13 @@ Total Automated Tests: 38 (34 Python/DOM + 4 Rust Parity)
 
 | Test Suite File | Type | Test Count | Focus Area |
 | :--- | :--- | :--- | :--- |
-| [`test_fuzzing_and_security.py`](../test_fuzzing_and_security.py) | Security / Fuzzing | 5 tests | Malformed JSON types, adversarial `<script>`/`<img>` payloads, API error sanitization, JSDOM execution |
-| [`test_engine_hardening.py`](../test_engine_hardening.py) | Engine / Correctness | 6 tests | SHA-256 deduplication, network attribution honesty, order-independent bipartite matching |
-| [`test_real_cape_ingestion.py`](../test_real_cape_ingestion.py) | Parser / Integration | 4 tests | Authentic native CAPE v2.2 export ingestion, RFC 6901 pointer resolution |
-| [`test_calibration_and_semantics.py`](../test_calibration_and_semantics.py) | Algorithm / Forensics | 7 tests | Heuristic similarity weighting, disentangled dimension verification |
-| [`test_holdout_and_provenance.py`](../test_holdout_and_provenance.py) | Scientific / Calibration | 6 tests | Held-out validation corpus, Clopper-Pearson 95% confidence intervals |
-| [`test_prototype.py`](../test_prototype.py) | Regression | 6 tests | Baseline pipeline end-to-end reconciliation and markdown export |
-| [`test_dom_xss.js`](../test_dom_xss.js) | Browser Security | 1 suite (4 tables) | WHATWG DOM tree inspection, zero script execution, numeric onclick verification |
+| [`test_fuzzing_and_security.py`](test_fuzzing_and_security.py) | Security / Fuzzing | 5 tests | Malformed JSON types, adversarial `<script>`/`<img>` payloads, API error sanitization, JSDOM execution |
+| [`test_engine_hardening.py`](test_engine_hardening.py) | Engine / Correctness | 6 tests | SHA-256 deduplication, network attribution honesty, order-independent bipartite matching |
+| [`test_real_cape_ingestion.py`](test_real_cape_ingestion.py) | Parser / Integration | 4 tests | Authentic native CAPE v2.2 export ingestion, RFC 6901 pointer resolution |
+| [`test_calibration_and_semantics.py`](test_calibration_and_semantics.py) | Algorithm / Forensics | 7 tests | Heuristic similarity weighting, disentangled dimension verification |
+| [`test_holdout_and_provenance.py`](test_holdout_and_provenance.py) | Scientific / Calibration | 6 tests | Held-out validation corpus, Clopper-Pearson 95% confidence intervals |
+| [`test_prototype.py`](test_prototype.py) | Regression | 6 tests | Baseline pipeline end-to-end reconciliation and markdown export |
+| [`test_dom_xss.js`](test_dom_xss.js) | Browser Security | 1 suite (4 tables) | WHATWG DOM tree inspection, zero script execution, numeric onclick verification |
 | [`rust/tests/test_parity.rs`](../rust/tests/test_parity.rs) | Parity / Rust | 4 tests | Bit-for-bit parity between Python and Rust engines across scenarios X and Y |
 
 ---
@@ -36,14 +36,14 @@ make test-all
 ### Python Suite
 ```bash
 make test
-# Or: python3 -m unittest discover -s . -p "test_*.py"
+# Or: python3 -m unittest discover -s tests -p "test_*.py"
 ```
 
 ### Browser DOM Security Suite
 Directly executes `web/static/index.html` inside WHATWG JSDOM with script execution enabled:
 ```bash
 make dom-test
-# Or: node test_dom_xss.js
+# Or: node tests/test_dom_xss.js
 ```
 
 ### Standalone Rust Core CLI Tests

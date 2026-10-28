@@ -196,8 +196,14 @@ class TestFuzzingAndSecurity(unittest.TestCase):
         import subprocess
         from pathlib import Path
 
-        js_script = Path(__file__).resolve().parent / "test_dom_xss.js"
-        if not js_script.exists():
+        this_dir = Path(__file__).resolve().parent
+        candidate_scripts = [
+            this_dir / "test_dom_xss.js",
+            this_dir / "tests" / "test_dom_xss.js",
+            this_dir.parent / "tests" / "test_dom_xss.js",
+        ]
+        js_script = next((p for p in candidate_scripts if p.exists()), None)
+        if not js_script:
             self.skipTest("test_dom_xss.js not found")
 
         node_bin = shutil.which("node")

@@ -178,7 +178,7 @@ The `sandbox_comparator` engine originated within a broader malware research mon
 | **Milestone 5 Protocol v5.1 Lock** | `7bf8d1b2a9...` | `a00ceb161d...` | Rehearsal findings, pilot kits, and decoupled trackers |
 | **Product MVP & Engine Hardening** | `product-mvp` branch | `product-mvp` branch | Order-independent matcher, hash dedup, local web app |
 
-All fixture hashes in `data/*.json` match the SHA-256 ledger in `PILOT_PACKET.md` with 100% cryptographic parity.
+All fixture hashes in `data/*.json` match the SHA-256 ledger in [`evaluations/PILOT_PACKET.md`](evaluations/PILOT_PACKET.md) with 100% cryptographic parity.
 
 ---
 
@@ -215,16 +215,16 @@ To run individual benchmark, ingestion, and browser security tests:
 make dom-test
 
 # Verify real CAPE v2.2 native ingestion
-python3 -m unittest test_real_cape_ingestion.py
+python3 -m unittest tests/test_real_cape_ingestion.py
 
 # Verify engine hardening (dedup, network honesty, bipartite order-independence)
-python3 -m unittest test_engine_hardening.py
+python3 -m unittest tests/test_engine_hardening.py
 
 # Verify adversarial payload fuzzing and error sanitization
-python3 -m unittest test_fuzzing_and_security.py
+python3 -m unittest tests/test_fuzzing_and_security.py
 
 # Verify provenance pointers and holdout CI
-python3 -m unittest test_holdout_and_provenance.py
+python3 -m unittest tests/test_holdout_and_provenance.py
 
 # Verify Rust standalone CLI parity
 make rust-test

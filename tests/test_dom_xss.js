@@ -10,7 +10,10 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 
 function runDomSecuritySuite() {
-  const htmlPath = path.join(__dirname, 'web', 'static', 'index.html');
+  const candidateRoot = fs.existsSync(path.join(__dirname, 'web', 'static', 'index.html'))
+    ? __dirname
+    : path.join(__dirname, '..');
+  const htmlPath = path.join(candidateRoot, 'web', 'static', 'index.html');
   const htmlContent = fs.readFileSync(htmlPath, 'utf8');
 
   // Set up virtual DOM with script execution enabled

@@ -76,9 +76,12 @@ sandbox_comparator/
 │   ├── src/                   # Rust reconciler, models, parsers, CLI
 │   └── tests/                 # Cross-language parity tests
 ├── data/                      # Fixtures and benchmark references
-├── tests/                     # Test documentation and coverage matrix
-├── test_*.py                  # Python unit, regression, and security suites
-└── test_dom_xss.js            # Live browser-level DOM XSS regression test
+├── evaluations/               # Protocol v5.1 clinical pilot study, interview protocols & trackers
+├── scripts/                   # Privacy audit and air-gap verification automation
+├── tests/                     # Automated Python, DOM XSS, and parity test suites
+│   ├── test_*.py              # Python unit, regression, and fuzzing suites
+│   ├── test_dom_xss.js        # Live browser-level DOM XSS regression test (JSDOM)
+│   └── README.md              # Test architecture & coverage matrix
 ```
 
 ---
