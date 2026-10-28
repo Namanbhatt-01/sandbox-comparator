@@ -25,18 +25,21 @@ from ..provenance import build_rfc6901_pointer
 HEX_SHA256_REGEX = re.compile(r"^[a-fA-F0-9]{64}$")
 
 
-def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_b_falcon") -> NormalizedReport:
-    if raw is None or not isinstance(raw, dict):
-        raw = {}
+def _safe_dict(val: Any) -> Dict[str, Any]:
+    return val if isinstance(val, dict) else {}
 
-    sub_info = raw.get("submission_info") or {}
-    sample_meta = sub_info.get("sample_metadata") or {}
-    execution = raw.get("execution") or {}
+
+def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_b_falcon") -> NormalizedReport:
+    raw = _safe_dict(raw)
+
+    sub_info = _safe_dict(raw.get("submission_info"))
+    sample_meta = _safe_dict(sub_info.get("sample_metadata"))
+    execution = _safe_dict(raw.get("execution"))
 
     norm_report = NormalizedReport(
         report_id=report_id,
-        sandbox_name=sub_info.get("analyzer", "Synthetic Falcon-like Sandbox (v7.x approximation)"),
-        schema_format=sub_info.get("schema", "falcon_hybrid_synthetic_v3"),
+        sandbox_name=str(sub_info.get("analyzer") or "Synthetic Falcon-like Sandbox (v7.x approximation)"),
+        schema_format=str(sub_info.get("schema") or "falcon_hybrid_synthetic_v3"),
         schema_provenance_type="SYNTHETIC_APPROXIMATION",
         sample_sha256=str(sample_meta.get("sha256", "")).lower().strip(),
         duration_seconds=sub_info.get("runtime_budget_seconds"),
@@ -184,13 +187,14 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
         )
 
     # 4. Network traffic
-    net = execution.get("network_traffic") or {}
+    net = _safe_dict(execution.get("network_traffic"))
     dns_list = net.get("dns_requests") if isinstance(net.get("dns_requests"), list) else []
     for idx, dns in enumerate(dns_list):
         if not isinstance(dns, dict):
             continue
         host = str(dns.get("hostname") or "")
-        ip_list = dns.get("ip_addresses") or [""]
+        raw_ips = dns.get("ip_addresses")
+        ip_list = raw_ips if isinstance(raw_ips, list) else ([str(raw_ips)] if raw_ips else [""])
         resolved = str(ip_list[0]) if ip_list else ""
         pointer_str = build_rfc6901_pointer(["execution", "network_traffic", "dns_requests", idx])
         pointer = EvidencePointer(

@@ -18,9 +18,12 @@ def detect_schema(raw: Optional[Dict[str, Any]]) -> str:
         return "unknown"
 
     # Falcon-like signatures
-    if "submission_info" in raw or "analyzer" in raw.get("submission_info", {}):
+    sub_info = raw.get("submission_info")
+    if isinstance(sub_info, dict) and ("analyzer" in sub_info or "sample_metadata" in sub_info):
         return "falcon"
-    if "execution" in raw and isinstance(raw.get("execution"), dict) and "process_tree" in raw["execution"]:
+    if "submission_info" in raw:
+        return "falcon"
+    if isinstance(raw.get("execution"), dict) and "process_tree" in raw["execution"]:
         return "falcon"
 
     # CAPE v2 / Cuckoo signatures

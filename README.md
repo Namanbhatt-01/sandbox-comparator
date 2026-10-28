@@ -1,7 +1,7 @@
 # Evidence-Aware Sandbox Comparator
 
 [![CI](https://github.com/Namanbhatt-01/sandbox-comparator/actions/workflows/ci.yml/badge.svg)](https://github.com/Namanbhatt-01/sandbox-comparator/actions)
-[![Tests: 28 Passing](https://img.shields.io/badge/tests-28%20passing-brightgreen.svg)](tests/)
+[![Tests: 33 Passing](https://img.shields.io/badge/tests-33%20passing-brightgreen.svg)](tests/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Architecture: Offline--First](https://img.shields.io/badge/architecture-offline--first-emerald.svg)]()
@@ -48,7 +48,7 @@ sandbox-comparator compare \
 ```
 
 ### Step 5: Verify Test Suite
-Run the 28 unit and regression tests locally:
+Run the 33 unit, regression, and security tests locally:
 ```bash
 make test
 # Or: python3 -m unittest discover -s . -p "test_*.py"
@@ -204,18 +204,21 @@ In compliance with scientific transparency and auditability:
 
 ## 9. Test Suite & Verification
 
-Run the full automated unit test suite (28 unit and regression tests):
+Run the full automated unit test suite (33 unit, regression, and security tests):
 ```bash
 python3 -m unittest discover -s . -p "test_*.py"
 ```
 
-To run individual benchmark and ingestion tests:
+To run individual benchmark, ingestion, and security tests:
 ```bash
 # Verify real CAPE v2.2 native ingestion
 python3 -m unittest test_real_cape_ingestion.py
 
 # Verify engine hardening (dedup, network honesty, bipartite order-independence)
 python3 -m unittest test_engine_hardening.py
+
+# Verify adversarial payload fuzzing and error sanitization
+python3 -m unittest test_fuzzing_and_security.py
 
 # Verify provenance pointers and holdout CI
 python3 -m unittest test_holdout_and_provenance.py

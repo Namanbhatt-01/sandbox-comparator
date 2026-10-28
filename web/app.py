@@ -4,6 +4,7 @@ Provides offline-first reconciliation endpoints and serves the modern dark-mode 
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException
@@ -13,6 +14,8 @@ from pydantic import BaseModel
 from engine.parsers import parse_auto_report
 from engine.reconciler import EvidenceComparator
 from cli import format_markdown_report
+
+logger = logging.getLogger("sandbox_comparator")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -193,9 +196,10 @@ def compare_reports(req: CompareRequest):
         serialized["markdown_report"] = format_markdown_report(comparison)
         return serialized
     except Exception as exc:
+        logger.error("Reconciliation failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=422,
-            detail=f"Reconciliation error while parsing or comparing reports: {str(exc)}"
+            detail="Invalid report payload or unsupported schema structure."
         )
 
 

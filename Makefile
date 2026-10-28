@@ -4,7 +4,7 @@ help:
 	@echo "Sandbox Comparator — Product Developer Commands"
 	@echo "==============================================="
 	@echo "  make install    Install Python dependencies"
-	@echo "  make test       Run the complete 28-test Python verification suite"
+	@echo "  make test       Run the complete 33-test Python verification and security suite"
 	@echo "  make rust-build Build the standalone high-performance Rust core CLI"
 	@echo "  make rust-test  Run Rust unit and parity integration tests"
 	@echo "  make test-all   Run both Python and Rust test suites"

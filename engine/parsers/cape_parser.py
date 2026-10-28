@@ -27,25 +27,36 @@ from ..provenance import build_rfc6901_pointer
 HEX_SHA256_REGEX = re.compile(r"^[a-fA-F0-9]{64}$")
 
 
+def _safe_dict(val: Any) -> Dict[str, Any]:
+    return val if isinstance(val, dict) else {}
+
+
 def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_cape") -> NormalizedReport:
-    if raw is None or not isinstance(raw, dict):
-        raw = {}
+    raw = _safe_dict(raw)
 
     # Support authentic native CAPE v2 root layout as well as wrapped community layout
-    info = raw.get("info") or raw.get("report_metadata") or {}
-    raw_target = raw.get("target") or info.get("target") or {}
+    info_raw = raw.get("info")
+    if not isinstance(info_raw, dict):
+        info_raw = raw.get("report_metadata")
+    info = _safe_dict(info_raw)
+
+    target_raw = raw.get("target")
+    if not isinstance(target_raw, dict):
+        target_raw = info.get("target")
+    raw_target = _safe_dict(target_raw)
 
     # Target file in CAPE v2 is often under target["file"] or directly in target
     if isinstance(raw_target.get("file"), dict):
         target_dict = raw_target["file"]
-    elif isinstance(raw_target, dict):
-        target_dict = raw_target
     else:
-        target_dict = {}
+        target_dict = raw_target
 
     sample_sha256 = str(target_dict.get("sha256", "")).lower().strip()
 
-    env = raw.get("environment") or info.get("environment") or {}
+    env_raw = raw.get("environment")
+    if not isinstance(env_raw, dict):
+        env_raw = info.get("environment")
+    env = _safe_dict(env_raw)
     duration = env.get("analysis_duration_seconds") or info.get("duration")
 
     sandbox_name = info.get("sandbox_name") or f"CAPE Sandbox {info.get('version', 'v2.5')}"
@@ -63,7 +74,7 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
         unsupported_fields=[]
     )
 
-    behavior = raw.get("behavior") if isinstance(raw.get("behavior"), dict) else {}
+    behavior = _safe_dict(raw.get("behavior"))
 
     # Surface unmapped vendor sections
     for unmapped in ["signatures", "memory", "debug", "apistats", "virustotal", "strings", "curtain", "extracted"]:
@@ -71,15 +82,15 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
             norm_report.unsupported_fields.append(f"CAPE v2.2 schema section '{unmapped}' is unmapped in current normalized schema")
 
     if "summary" in behavior:
-        summary_obj = behavior["summary"]
-        if isinstance(summary_obj, dict):
-            if summary_obj.get("keys"):
-                norm_report.unsupported_fields.append("CAPE v2.2 schema 'behavior.summary.keys' (registry) is unmapped")
-            if summary_obj.get("mutexes"):
-                norm_report.unsupported_fields.append("CAPE v2.2 schema 'behavior.summary.mutexes' is unmapped")
+        summary_obj = _safe_dict(behavior.get("summary"))
+        if summary_obj.get("keys"):
+            norm_report.unsupported_fields.append("CAPE v2.2 schema 'behavior.summary.keys' (registry) is unmapped")
+        if summary_obj.get("mutexes"):
+            norm_report.unsupported_fields.append("CAPE v2.2 schema 'behavior.summary.mutexes' is unmapped")
 
     # 1. Limitations or warnings
-    raw_warnings = info.get("errors_or_warnings") or raw.get("debug", {}).get("errors") or []
+    debug_obj = _safe_dict(raw.get("debug"))
+    raw_warnings = info.get("errors_or_warnings") or debug_obj.get("errors") or []
     if not isinstance(raw_warnings, list):
         raw_warnings = []
     for idx, warn in enumerate(raw_warnings):
@@ -177,7 +188,8 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
         if not isinstance(df, dict):
             continue
         name = str(df.get("name") or "unnamed_artifact")
-        guest_paths = df.get("guest_paths") or []
+        raw_paths = df.get("guest_paths")
+        guest_paths = raw_paths if isinstance(raw_paths, list) else []
         path = guest_paths[0] if guest_paths else str(df.get("path") or "")
         raw_hash = str(df.get("sha256") or "").lower().strip()
         is_malformed = not bool(HEX_SHA256_REGEX.match(raw_hash))
@@ -224,7 +236,7 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
         network = raw["network"]
         network_pointer_base = ["network"]
     else:
-        network = behavior.get("network") or {}
+        network = _safe_dict(behavior.get("network"))
         network_pointer_base = ["behavior", "network"]
 
     dns_list = network.get("dns") if isinstance(network.get("dns"), list) else []
