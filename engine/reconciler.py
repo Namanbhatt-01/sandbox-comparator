@@ -432,6 +432,62 @@ class EvidenceComparator:
 
         return results
 
+    def _score_network_pair(self, na: NetworkObservation, nb: NetworkObservation) -> Tuple[float, bool]:
+        """
+        Calculates similarity between two network observations sharing a connection_key.
+        Returns (score, has_discriminators).
+        Evaluates source port, PID, timestamp, and HTTP/DNS attributes from raw_snippet.
+        """
+        snip_a = na.evidence.raw_snippet if na.evidence and isinstance(na.evidence.raw_snippet, dict) else {}
+        snip_b = nb.evidence.raw_snippet if nb.evidence and isinstance(nb.evidence.raw_snippet, dict) else {}
+
+        score = 0.0
+        has_discriminators = False
+
+        # Source port matching
+        sport_a = snip_a.get("sport") or snip_a.get("src_port")
+        sport_b = snip_b.get("sport") or snip_b.get("src_port")
+        if sport_a is not None and sport_b is not None:
+            has_discriminators = True
+            if sport_a == sport_b:
+                score += 0.40
+            else:
+                score -= 0.30
+
+        # PID matching
+        pid_a = snip_a.get("pid") or snip_a.get("source_pid")
+        pid_b = snip_b.get("pid") or snip_b.get("source_pid")
+        if pid_a is not None and pid_b is not None:
+            has_discriminators = True
+            if pid_a == pid_b:
+                score += 0.30
+            else:
+                score -= 0.10
+
+        # Timestamp proximity (within 2 seconds)
+        time_a = snip_a.get("time") or snip_a.get("timestamp")
+        time_b = snip_b.get("time") or snip_b.get("timestamp")
+        if time_a is not None and time_b is not None:
+            try:
+                diff = abs(float(time_a) - float(time_b))
+                has_discriminators = True
+                if diff <= 2.0:
+                    score += 0.30
+                elif diff <= 10.0:
+                    score += 0.15
+            except (ValueError, TypeError):
+                pass
+
+        # Method / URI matching (for HTTP)
+        method_a = snip_a.get("method")
+        method_b = snip_b.get("method")
+        if method_a and method_b:
+            has_discriminators = True
+            if str(method_a).upper() == str(method_b).upper():
+                score += 0.20
+
+        return max(score, 0.0), has_discriminators
+
     def _reconcile_network(self) -> List[ReconciledNetworkItem]:
         results: List[ReconciledNetworkItem] = []
         net_a_by_key: Dict[str, List[NetworkObservation]] = {}
@@ -448,72 +504,59 @@ class EvidenceComparator:
             list_a = net_a_by_key.get(key, [])
             list_b = net_b_by_key.get(key, [])
 
-            max_len = max(len(list_a), len(list_b))
-            for i in range(max_len):
-                na = list_a[i] if i < len(list_a) else None
-                nb = list_b[i] if i < len(list_b) else None
+            pairs: List[Tuple[NetworkObservation, NetworkObservation, str, bool]] = []
+            unmatched_a: List[NetworkObservation] = []
+            unmatched_b: List[NetworkObservation] = []
 
-                evidence_links: Dict[str, EvidencePointer] = {}
-                observed_in: List[str] = []
-                unobserved_in: List[str] = []
-                policy_rec: Optional[str] = None
-                policy_ptr: Optional[EvidencePointer] = None
-                cross_corr = "UNLINKED"
-                causal_stat = "UNKNOWN"
-                conn_state = "UNKNOWN"
+            if len(list_a) == 1 and len(list_b) == 1:
+                pairs.append((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH", True))
+            elif len(list_a) > 0 and len(list_b) > 0:
+                # Pairwise matching among repeated connections using discriminating attributes
+                candidate_pairs = []
+                for i_a, na in enumerate(list_a):
+                    for i_b, nb in enumerate(list_b):
+                        score, has_disc = self._score_network_pair(na, nb)
+                        candidate_pairs.append((score, has_disc, i_a, i_b))
 
-                if na and nb:
-                    obs_presence = ObservationPresence.OBSERVED_IN_BOTH
-                    causal = CausalExplanation.CORROBORATED_EXECUTION
-                    cross_corr = "DIRECT_IDENTIFIER_MATCH"
-                    causal_stat = "CORROBORATED_SOCKET"
-                    conn_state = "SOCKET_RECORD_LOGGED"
-                    observed_in.extend([self.report_a.report_id, self.report_b.report_id])
-                    evidence_links[self.report_a.report_id] = na.evidence
-                    evidence_links[self.report_b.report_id] = nb.evidence
+                # Sort candidates by score descending
+                candidate_pairs.sort(key=lambda x: x[0], reverse=True)
+
+                used_a: Set[int] = set()
+                used_b: Set[int] = set()
+                for score, has_disc, i_a, i_b in candidate_pairs:
+                    if i_a in used_a or i_b in used_b:
+                        continue
+                    used_a.add(i_a)
+                    used_b.add(i_b)
+                    corr = "DIRECT_IDENTIFIER_MATCH" if (has_disc and score > 0.0) else "AGGREGATE_ENDPOINT_CORROBORATION"
+                    pairs.append((list_a[i_a], list_b[i_b], corr, has_disc))
+
+                unmatched_a = [list_a[i] for i in range(len(list_a)) if i not in used_a]
+                unmatched_b = [list_b[i] for i in range(len(list_b)) if i not in used_b]
+            else:
+                unmatched_a = list(list_a)
+                unmatched_b = list(list_b)
+
+            for na, nb, cross_corr, has_disc in pairs:
+                evidence_links: Dict[str, EvidencePointer] = {
+                    self.report_a.report_id: na.evidence,
+                    self.report_b.report_id: nb.evidence
+                }
+                obs_presence = ObservationPresence.OBSERVED_IN_BOTH
+                causal = CausalExplanation.CORROBORATED_EXECUTION
+                causal_stat = "CORROBORATED_SOCKET"
+                conn_state = "SOCKET_RECORD_LOGGED"
+                if cross_corr == "DIRECT_IDENTIFIER_MATCH":
                     interpretation = (
-                        f"Socket observation '{key}' corroborated across both reports. "
+                        f"Socket observation '{key}' corroborated across both reports with matching connection attributes. "
                         f"Telemetry confirms both environments logged socket activity; does not establish "
                         f"full application-layer handshake completion or identical payload transmission without packet-level capture."
                     )
-
-                elif na and not nb:
-                    obs_presence = ObservationPresence.OBSERVED_ONLY_IN_A
-                    observed_in.append(self.report_a.report_id)
-                    unobserved_in.append(self.report_b.report_id)
-                    evidence_links[self.report_a.report_id] = na.evidence
-
-                    causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
-                        self._evaluate_network_causality(na, self.report_b)
-                    )
-
-                    evidence_links[self.report_b.report_id] = EvidencePointer(
-                        report_id=self.report_b.report_id,
-                        json_pointer="",
-                        event_summary=f"Connection {key} unrecorded in Report B",
-                        raw_snippet={},
-                        is_available=False,
-                        missing_reason=policy_rec or interpretation
-                    )
-
                 else:
-                    assert nb is not None
-                    obs_presence = ObservationPresence.OBSERVED_ONLY_IN_B
-                    observed_in.append(self.report_b.report_id)
-                    unobserved_in.append(self.report_a.report_id)
-                    evidence_links[self.report_b.report_id] = nb.evidence
-
-                    causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
-                        self._evaluate_network_causality(nb, self.report_a)
-                    )
-
-                    evidence_links[self.report_a.report_id] = EvidencePointer(
-                        report_id=self.report_a.report_id,
-                        json_pointer="",
-                        event_summary=f"Connection {key} unrecorded in Report A",
-                        raw_snippet={},
-                        is_available=False,
-                        missing_reason=policy_rec or interpretation
+                    interpretation = (
+                        f"Endpoint '{key}' logged multiple socket records ({len(list_a)} in {self.report_a.report_id}, "
+                        f"{len(list_b)} in {self.report_b.report_id}). Specific stream-to-stream bijection is unestablished "
+                        f"due to lack of distinct source ports or timestamps; aggregate traffic to destination is corroborated."
                     )
 
                 results.append(
@@ -522,14 +565,78 @@ class EvidenceComparator:
                         observation_presence=obs_presence,
                         observation_type="TELEMETRY_LOGGED_SOCKET_RECORD",
                         connection_state=conn_state,
+                        policy_decision=None,
+                        cross_report_correlation=cross_corr,
+                        causal_status=causal_stat,
+                        causal_explanation=causal,
+                        policy_decision_record=None,
+                        policy_decision_evidence=None,
+                        observed_in_reports=[self.report_a.report_id, self.report_b.report_id],
+                        unobserved_in_reports=[],
+                        evidence_links=evidence_links,
+                        epistemic_interpretation=interpretation
+                    )
+                )
+
+            for na in unmatched_a:
+                evidence_links = {self.report_a.report_id: na.evidence}
+                causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
+                    self._evaluate_network_causality(na, self.report_b)
+                )
+                evidence_links[self.report_b.report_id] = EvidencePointer(
+                    report_id=self.report_b.report_id,
+                    json_pointer="",
+                    event_summary=f"Connection {key} unrecorded in Report B",
+                    raw_snippet={},
+                    is_available=False,
+                    missing_reason=policy_rec or interpretation
+                )
+                results.append(
+                    ReconciledNetworkItem(
+                        connection_key=key,
+                        observation_presence=ObservationPresence.OBSERVED_ONLY_IN_A,
+                        observation_type="TELEMETRY_LOGGED_SOCKET_RECORD",
+                        connection_state=conn_state,
                         policy_decision=policy_rec,
                         cross_report_correlation=cross_corr,
                         causal_status=causal_stat,
                         causal_explanation=causal,
                         policy_decision_record=policy_rec,
                         policy_decision_evidence=policy_ptr,
-                        observed_in_reports=observed_in,
-                        unobserved_in_reports=unobserved_in,
+                        observed_in_reports=[self.report_a.report_id],
+                        unobserved_in_reports=[self.report_b.report_id],
+                        evidence_links=evidence_links,
+                        epistemic_interpretation=interpretation
+                    )
+                )
+
+            for nb in unmatched_b:
+                evidence_links = {self.report_b.report_id: nb.evidence}
+                causal, policy_rec, policy_ptr, interpretation, cross_corr, causal_stat, conn_state = (
+                    self._evaluate_network_causality(nb, self.report_a)
+                )
+                evidence_links[self.report_a.report_id] = EvidencePointer(
+                    report_id=self.report_a.report_id,
+                    json_pointer="",
+                    event_summary=f"Connection {key} unrecorded in Report A",
+                    raw_snippet={},
+                    is_available=False,
+                    missing_reason=policy_rec or interpretation
+                )
+                results.append(
+                    ReconciledNetworkItem(
+                        connection_key=key,
+                        observation_presence=ObservationPresence.OBSERVED_ONLY_IN_B,
+                        observation_type="TELEMETRY_LOGGED_SOCKET_RECORD",
+                        connection_state=conn_state,
+                        policy_decision=policy_rec,
+                        cross_report_correlation=cross_corr,
+                        causal_status=causal_stat,
+                        causal_explanation=causal,
+                        policy_decision_record=policy_rec,
+                        policy_decision_evidence=policy_ptr,
+                        observed_in_reports=[self.report_b.report_id],
+                        unobserved_in_reports=[self.report_a.report_id],
                         evidence_links=evidence_links,
                         epistemic_interpretation=interpretation
                     )

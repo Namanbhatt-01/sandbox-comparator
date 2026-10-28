@@ -212,6 +212,43 @@ class TestEngineHardening(unittest.TestCase):
         self.assertNotIn("rep_b", match_a2.pids_by_report)
         self.assertEqual(match_a2.confidence.value, "UNRESOLVED")
 
+    def test_network_repeated_events_attribute_alignment_not_blind_position(self):
+        """
+        Verify that multiple network connections to the same endpoint are paired by
+        distinctive attributes (source port, PID, timestamp) rather than naive list index.
+        """
+        ptr_a1 = EvidencePointer("rep_a", "/network/tcp/0", "Stream 1", {"sport": 51001, "time": 10.0, "pid": 111}, True)
+        ptr_a2 = EvidencePointer("rep_a", "/network/tcp/1", "Stream 2", {"sport": 51002, "time": 20.0, "pid": 222}, True)
+
+        # In Report B, order is reversed
+        ptr_b1 = EvidencePointer("rep_b", "/network/tcp/0", "Stream 2", {"sport": 51002, "time": 20.0, "pid": 222}, True)
+        ptr_b2 = EvidencePointer("rep_b", "/network/tcp/1", "Stream 1", {"sport": 51001, "time": 10.0, "pid": 111}, True)
+
+        net_a1 = NetworkObservation("rep_a", "TCP", "203.0.113.50", 443, ptr_a1)
+        net_a2 = NetworkObservation("rep_a", "TCP", "203.0.113.50", 443, ptr_a2)
+
+        net_b1 = NetworkObservation("rep_b", "TCP", "203.0.113.50", 443, ptr_b1)
+        net_b2 = NetworkObservation("rep_b", "TCP", "203.0.113.50", 443, ptr_b2)
+
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, network_events=[net_a1, net_a2])
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, network_events=[net_b1, net_b2])
+
+        result = EvidenceComparator(rep_a, rep_b).reconcile()
+        self.assertEqual(len(result.reconciled_network), 2)
+
+        for item in result.reconciled_network:
+            self.assertEqual(item.observation_presence.value, "OBSERVED_IN_BOTH")
+            ptr_a = item.evidence_links.get("rep_a")
+            ptr_b = item.evidence_links.get("rep_b")
+            self.assertIsNotNone(ptr_a)
+            self.assertIsNotNone(ptr_b)
+            # Source ports MUST match across paired evidence links
+            self.assertEqual(
+                ptr_a.raw_snippet.get("sport"),
+                ptr_b.raw_snippet.get("sport"),
+                f"Mismatched pairing: A sport={ptr_a.raw_snippet.get('sport')} paired with B sport={ptr_b.raw_snippet.get('sport')}"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

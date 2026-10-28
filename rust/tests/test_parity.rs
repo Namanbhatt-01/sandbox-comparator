@@ -340,3 +340,111 @@ fn test_greedy_score_sorted_matching_anchor_preservation_parity() {
     assert_eq!(match_a2.pids_by_report.get("rep_b"), None);
     assert_eq!(match_a2.confidence, ProcessMatchConfidence::UNRESOLVED);
 }
+
+#[test]
+fn test_network_repeated_events_attribute_alignment_not_blind_position_parity() {
+    let ptr_a1 = EvidencePointer::available(
+        "rep_a",
+        "/network/tcp/0",
+        "Stream 1",
+        serde_json::json!({"sport": 51001, "time": 10.0, "pid": 111}),
+    );
+    let ptr_a2 = EvidencePointer::available(
+        "rep_a",
+        "/network/tcp/1",
+        "Stream 2",
+        serde_json::json!({"sport": 51002, "time": 20.0, "pid": 222}),
+    );
+
+    // In Report B, order is reversed
+    let ptr_b1 = EvidencePointer::available(
+        "rep_b",
+        "/network/tcp/0",
+        "Stream 2",
+        serde_json::json!({"sport": 51002, "time": 20.0, "pid": 222}),
+    );
+    let ptr_b2 = EvidencePointer::available(
+        "rep_b",
+        "/network/tcp/1",
+        "Stream 1",
+        serde_json::json!({"sport": 51001, "time": 10.0, "pid": 111}),
+    );
+
+    let net_a1 = NetworkObservation {
+        report_id: "rep_a".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.50".to_string(),
+        port: Some(443),
+        evidence: ptr_a1,
+    };
+    let net_a2 = NetworkObservation {
+        report_id: "rep_a".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.50".to_string(),
+        port: Some(443),
+        evidence: ptr_a2,
+    };
+
+    let net_b1 = NetworkObservation {
+        report_id: "rep_b".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.50".to_string(),
+        port: Some(443),
+        evidence: ptr_b1,
+    };
+    let net_b2 = NetworkObservation {
+        report_id: "rep_b".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.50".to_string(),
+        port: Some(443),
+        evidence: ptr_b2,
+    };
+
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "CAPE".to_string(),
+        schema_provenance_type: "DOCUMENTED_VENDOR_FORMAT".to_string(),
+        sample_sha256: "aaa".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![net_a1, net_a2],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "Falcon".to_string(),
+        schema_provenance_type: "DOCUMENTED_VENDOR_FORMAT".to_string(),
+        sample_sha256: "aaa".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![net_b1, net_b2],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let comparator = EvidenceComparator::new(&norm_a, &norm_b);
+    let comparison = comparator.reconcile();
+
+    assert_eq!(comparison.reconciled_network.len(), 2);
+    for item in &comparison.reconciled_network {
+        assert_eq!(item.observation_presence, ObservationPresence::OBSERVED_IN_BOTH);
+        let ptr_a = item.evidence_links.get("rep_a").expect("rep_a link");
+        let ptr_b = item.evidence_links.get("rep_b").expect("rep_b link");
+        let sport_a = ptr_a.raw_snippet.get("sport").and_then(|v| v.as_i64());
+        let sport_b = ptr_b.raw_snippet.get("sport").and_then(|v| v.as_i64());
+        assert_eq!(
+            sport_a,
+            sport_b,
+            "Paired network events must have matching source ports: {:?} vs {:?}",
+            sport_a,
+            sport_b
+        );
+    }
+}

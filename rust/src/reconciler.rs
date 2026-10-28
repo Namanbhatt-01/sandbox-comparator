@@ -387,7 +387,7 @@ impl<'a> EvidenceComparator<'a> {
             );
         }
 
-        let mut score = 0.0;
+        let mut score: f64 = 0.0;
         let mut reasons = Vec::new();
 
         if img_a == img_b {
@@ -602,6 +602,64 @@ impl<'a> EvidenceComparator<'a> {
         results
     }
 
+    fn score_network_pair(&self, na: &NetworkObservation, nb: &NetworkObservation) -> (f64, bool) {
+        let snip_a = &na.evidence.raw_snippet;
+        let snip_b = &nb.evidence.raw_snippet;
+
+        let mut score: f64 = 0.0;
+        let mut has_disc = false;
+
+        let get_sport = |v: &serde_json::Value| {
+            v.get("sport").or_else(|| v.get("src_port")).and_then(|x| x.as_i64())
+        };
+        let get_pid = |v: &serde_json::Value| {
+            v.get("pid").or_else(|| v.get("source_pid")).and_then(|x| x.as_i64())
+        };
+        let get_time = |v: &serde_json::Value| {
+            v.get("time").or_else(|| v.get("timestamp")).and_then(|x| x.as_f64())
+        };
+
+        if let (Some(sa), Some(sb)) = (get_sport(snip_a), get_sport(snip_b)) {
+            has_disc = true;
+            if sa == sb {
+                score += 0.40;
+            } else {
+                score -= 0.30;
+            }
+        }
+
+        if let (Some(pa), Some(pb)) = (get_pid(snip_a), get_pid(snip_b)) {
+            has_disc = true;
+            if pa == pb {
+                score += 0.30;
+            } else {
+                score -= 0.10;
+            }
+        }
+
+        if let (Some(ta), Some(tb)) = (get_time(snip_a), get_time(snip_b)) {
+            has_disc = true;
+            let diff = (ta - tb).abs();
+            if diff <= 2.0 {
+                score += 0.30;
+            } else if diff <= 10.0 {
+                score += 0.15;
+            }
+        }
+
+        if let (Some(ma), Some(mb)) = (
+            snip_a.get("method").and_then(|x| x.as_str()),
+            snip_b.get("method").and_then(|x| x.as_str()),
+        ) {
+            has_disc = true;
+            if ma.eq_ignore_ascii_case(mb) {
+                score += 0.20;
+            }
+        }
+
+        (score.max(0.0), has_disc)
+    }
+
     fn reconcile_network(&self) -> Vec<ReconciledNetworkItem> {
         let mut results = Vec::new();
 
@@ -629,121 +687,158 @@ impl<'a> EvidenceComparator<'a> {
             let list_a = net_a_by_key.get(&key).cloned().unwrap_or_default();
             let list_b = net_b_by_key.get(&key).cloned().unwrap_or_default();
 
-            let max_len = list_a.len().max(list_b.len());
-            for i in 0..max_len {
-                let opt_a = list_a.get(i).copied();
-                let opt_b = list_b.get(i).copied();
+            let mut pairs = Vec::new();
+            let mut unmatched_a = Vec::new();
+            let mut unmatched_b = Vec::new();
 
+            if list_a.len() == 1 && list_b.len() == 1 {
+                pairs.push((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH".to_string(), true));
+            } else if !list_a.is_empty() && !list_b.is_empty() {
+                let mut candidates = Vec::new();
+                for (i_a, na) in list_a.iter().enumerate() {
+                    for (i_b, nb) in list_b.iter().enumerate() {
+                        let (score, has_disc) = self.score_network_pair(na, nb);
+                        candidates.push((score, has_disc, i_a, i_b));
+                    }
+                }
+
+                candidates.sort_by(|x, y| y.0.partial_cmp(&x.0).unwrap_or(std::cmp::Ordering::Equal));
+
+                let mut used_a = HashSet::new();
+                let mut used_b = HashSet::new();
+                for (score, has_disc, i_a, i_b) in candidates {
+                    if used_a.contains(&i_a) || used_b.contains(&i_b) {
+                        continue;
+                    }
+                    used_a.insert(i_a);
+                    used_b.insert(i_b);
+                    let corr = if has_disc && score > 0.0 {
+                        "DIRECT_IDENTIFIER_MATCH".to_string()
+                    } else {
+                        "AGGREGATE_ENDPOINT_CORROBORATION".to_string()
+                    };
+                    pairs.push((list_a[i_a], list_b[i_b], corr, has_disc));
+                }
+
+                for (i_a, na) in list_a.iter().enumerate() {
+                    if !used_a.contains(&i_a) {
+                        unmatched_a.push(*na);
+                    }
+                }
+                for (i_b, nb) in list_b.iter().enumerate() {
+                    if !used_b.contains(&i_b) {
+                        unmatched_b.push(*nb);
+                    }
+                }
+            } else {
+                unmatched_a.extend(list_a);
+                unmatched_b.extend(list_b);
+            }
+
+            for (na, nb, cross_corr, _) in pairs {
                 let mut evidence_links = BTreeMap::new();
-                let mut observed_in = Vec::new();
-                let mut unobserved_in = Vec::new();
+                evidence_links.insert(self.report_a.report_id.clone(), na.evidence.clone());
+                evidence_links.insert(self.report_b.report_id.clone(), nb.evidence.clone());
 
-                let (
-                    obs_presence,
-                    causal,
-                    policy_rec,
-                    policy_ptr,
-                    cross_corr,
-                    causal_stat,
-                    conn_state,
-                    interpretation,
-                ) = match (opt_a, opt_b) {
-                    (Some(na), Some(nb)) => {
-                        observed_in.push(self.report_a.report_id.clone());
-                        observed_in.push(self.report_b.report_id.clone());
-                        evidence_links.insert(self.report_a.report_id.clone(), na.evidence.clone());
-                        evidence_links.insert(self.report_b.report_id.clone(), nb.evidence.clone());
-
-                        let interp = format!(
-                            "Socket observation '{}' corroborated across both reports. Telemetry confirms both environments logged socket activity; does not establish full application-layer handshake completion or identical payload transmission without packet-level capture.",
-                            key
-                        );
-
-                        (
-                            ObservationPresence::OBSERVED_IN_BOTH,
-                            CausalExplanation::CORROBORATED_EXECUTION,
-                            None,
-                            None,
-                            "DIRECT_IDENTIFIER_MATCH".to_string(),
-                            "CORROBORATED_SOCKET".to_string(),
-                            "SOCKET_RECORD_LOGGED".to_string(),
-                            interp,
-                        )
-                    }
-                    (Some(na), None) => {
-                        observed_in.push(self.report_a.report_id.clone());
-                        unobserved_in.push(self.report_b.report_id.clone());
-                        evidence_links.insert(self.report_a.report_id.clone(), na.evidence.clone());
-
-                        let (causal, pol_rec, pol_ptr, interp, x_corr, c_stat, c_state) =
-                            self.evaluate_network_causality(na, self.report_b);
-
-                        evidence_links.insert(
-                            self.report_b.report_id.clone(),
-                            EvidencePointer::missing(
-                                &self.report_b.report_id,
-                                &format!("Connection {} unrecorded in Report B", key),
-                                pol_rec.as_deref().unwrap_or(&interp),
-                            ),
-                        );
-
-                        (
-                            ObservationPresence::OBSERVED_ONLY_IN_A,
-                            causal,
-                            pol_rec,
-                            pol_ptr,
-                            x_corr,
-                            c_stat,
-                            c_state,
-                            interp,
-                        )
-                    }
-                    (None, Some(nb)) => {
-                        observed_in.push(self.report_b.report_id.clone());
-                        unobserved_in.push(self.report_a.report_id.clone());
-                        evidence_links.insert(self.report_b.report_id.clone(), nb.evidence.clone());
-
-                        let (causal, pol_rec, pol_ptr, interp, x_corr, c_stat, c_state) =
-                            self.evaluate_network_causality(nb, self.report_a);
-
-                        evidence_links.insert(
-                            self.report_a.report_id.clone(),
-                            EvidencePointer::missing(
-                                &self.report_a.report_id,
-                                &format!("Connection {} unrecorded in Report A", key),
-                                pol_rec.as_deref().unwrap_or(&interp),
-                            ),
-                        );
-
-                        (
-                            ObservationPresence::OBSERVED_ONLY_IN_B,
-                            causal,
-                            pol_rec,
-                            pol_ptr,
-                            x_corr,
-                            c_stat,
-                            c_state,
-                            interp,
-                        )
-                    }
-                    (None, None) => unreachable!(),
+                let interp = if cross_corr == "DIRECT_IDENTIFIER_MATCH" {
+                    format!(
+                        "Socket observation '{}' corroborated across both reports with matching connection attributes. Telemetry confirms both environments logged socket activity; does not establish full application-layer handshake completion or identical payload transmission without packet-level capture.",
+                        key
+                    )
+                } else {
+                    format!(
+                        "Endpoint '{}' logged multiple socket records ({} in {}, {} in {}). Specific stream-to-stream bijection is unestablished due to lack of distinct source ports or timestamps; aggregate traffic to destination is corroborated.",
+                        key,
+                        net_a_by_key.get(&key).map(|v| v.len()).unwrap_or(0),
+                        self.report_a.report_id,
+                        net_b_by_key.get(&key).map(|v| v.len()).unwrap_or(0),
+                        self.report_b.report_id
+                    )
                 };
 
                 results.push(ReconciledNetworkItem {
                     connection_key: key.clone(),
-                    observation_presence: obs_presence,
+                    observation_presence: ObservationPresence::OBSERVED_IN_BOTH,
                     observation_type: "TELEMETRY_LOGGED_SOCKET_RECORD".to_string(),
-                    connection_state: conn_state,
-                    policy_decision: policy_rec.clone(),
+                    connection_state: "SOCKET_RECORD_LOGGED".to_string(),
+                    policy_decision: None,
                     cross_report_correlation: cross_corr,
-                    causal_status: causal_stat,
-                    causal_explanation: causal,
-                    policy_decision_record: policy_rec,
-                    policy_decision_evidence: policy_ptr,
-                    observed_in_reports: observed_in,
-                    unobserved_in_reports: unobserved_in,
+                    causal_status: "CORROBORATED_SOCKET".to_string(),
+                    causal_explanation: CausalExplanation::CORROBORATED_EXECUTION,
+                    policy_decision_record: None,
+                    policy_decision_evidence: None,
+                    epistemic_interpretation: interp,
+                    observed_in_reports: vec![self.report_a.report_id.clone(), self.report_b.report_id.clone()],
+                    unobserved_in_reports: Vec::new(),
                     evidence_links,
-                    epistemic_interpretation: interpretation,
+                });
+            }
+
+            for na in unmatched_a {
+                let mut evidence_links = BTreeMap::new();
+                evidence_links.insert(self.report_a.report_id.clone(), na.evidence.clone());
+
+                let (causal, pol_rec, pol_ptr, interp, x_corr, c_stat, c_state) =
+                    self.evaluate_network_causality(na, self.report_b);
+
+                evidence_links.insert(
+                    self.report_b.report_id.clone(),
+                    EvidencePointer::missing(
+                        &self.report_b.report_id,
+                        &format!("Connection {} unrecorded in Report B", key),
+                        pol_rec.as_deref().unwrap_or(&interp),
+                    ),
+                );
+
+                results.push(ReconciledNetworkItem {
+                    connection_key: key.clone(),
+                    observation_presence: ObservationPresence::OBSERVED_ONLY_IN_A,
+                    observation_type: "TELEMETRY_LOGGED_SOCKET_RECORD".to_string(),
+                    connection_state: c_state,
+                    policy_decision: pol_rec.clone(),
+                    cross_report_correlation: x_corr,
+                    causal_status: c_stat,
+                    causal_explanation: causal,
+                    policy_decision_record: pol_rec,
+                    policy_decision_evidence: pol_ptr,
+                    epistemic_interpretation: interp,
+                    observed_in_reports: vec![self.report_a.report_id.clone()],
+                    unobserved_in_reports: vec![self.report_b.report_id.clone()],
+                    evidence_links,
+                });
+            }
+
+            for nb in unmatched_b {
+                let mut evidence_links = BTreeMap::new();
+                evidence_links.insert(self.report_b.report_id.clone(), nb.evidence.clone());
+
+                let (causal, pol_rec, pol_ptr, interp, x_corr, c_stat, c_state) =
+                    self.evaluate_network_causality(nb, self.report_a);
+
+                evidence_links.insert(
+                    self.report_a.report_id.clone(),
+                    EvidencePointer::missing(
+                        &self.report_a.report_id,
+                        &format!("Connection {} unrecorded in Report A", key),
+                        pol_rec.as_deref().unwrap_or(&interp),
+                    ),
+                );
+
+                results.push(ReconciledNetworkItem {
+                    connection_key: key.clone(),
+                    observation_presence: ObservationPresence::OBSERVED_ONLY_IN_B,
+                    observation_type: "TELEMETRY_LOGGED_SOCKET_RECORD".to_string(),
+                    connection_state: c_state,
+                    policy_decision: pol_rec.clone(),
+                    cross_report_correlation: x_corr,
+                    causal_status: c_stat,
+                    causal_explanation: causal,
+                    policy_decision_record: pol_rec,
+                    policy_decision_evidence: pol_ptr,
+                    epistemic_interpretation: interp,
+                    observed_in_reports: vec![self.report_b.report_id.clone()],
+                    unobserved_in_reports: vec![self.report_a.report_id.clone()],
+                    evidence_links,
                 });
             }
         }
