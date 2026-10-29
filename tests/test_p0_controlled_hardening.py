@@ -162,6 +162,20 @@ class TestP0ControlledHardening(unittest.TestCase):
         self.assertIn("[!WARNING] **Cross-Sample Comparison**", md_report)
         self.assertIn("Behavioral alignments indicate heuristic overlap, not same-sample execution reproducibility", md_report)
 
+        # Web UI findings cards must reflect cross-sample similarity, not corroborated execution
+        from web.app import serialize_comparison
+        serialized = serialize_comparison(comparison)
+        findings = serialized["investigation_findings"]
+        proc_f = next((f for f in findings if f["category"] == "EXECUTION"), None)
+        self.assertIsNotNone(proc_f)
+        self.assertEqual(proc_f["title"], "Cross-Sample Process Similarity")
+        self.assertIn("NOT same-sample execution reproducibility", proc_f["detail"])
+
+        file_f = next((f for f in findings if f["category"] == "PERSISTENCE"), None)
+        self.assertIsNotNone(file_f)
+        self.assertEqual(file_f["title"], "Shared Artifact Hashes Across Samples")
+        self.assertIn("without establishing same-sample identity", file_f["detail"])
+
     # =========================================================================
     # P0 Risk 2: PID Reassignment & Order Shuffling
     # =========================================================================
