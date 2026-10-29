@@ -75,8 +75,10 @@ class TestEngineHardening(unittest.TestCase):
 
     def test_network_epistemic_honesty(self):
         """
-        Verify that shared socket records are marked SOCKET_RECORD_LOGGED and CORROBORATED_SOCKET,
+        Verify that shared socket records are marked SOCKET_RECORD_LOGGED,
         not making causal overclaims of ESTABLISHED TCP handshakes or CONFIRMED identical payloads.
+        Singleton records without discriminators receive SINGLETON_ENDPOINT_OVERLAP / ENDPOINT_MATCH.
+        Records with matching discriminators receive DIRECT_IDENTIFIER_MATCH / CORROBORATED_SOCKET.
         """
         net_ev_a = NetworkObservation("rep_a", "TCP", "198.51.100.1", 443, self.dummy_pointer)
         net_ev_b = NetworkObservation("rep_b", "TCP", "198.51.100.1", 443, self.dummy_pointer)
@@ -89,8 +91,24 @@ class TestEngineHardening(unittest.TestCase):
         net_item = result.reconciled_network[0]
 
         self.assertEqual(net_item.connection_state, "SOCKET_RECORD_LOGGED")
-        self.assertEqual(net_item.causal_status, "CORROBORATED_SOCKET")
-        self.assertIn("does not establish full application-layer handshake completion", net_item.epistemic_interpretation)
+        self.assertEqual(net_item.cross_report_correlation, "SINGLETON_ENDPOINT_OVERLAP")
+        self.assertEqual(net_item.causal_status, "ENDPOINT_MATCH")
+        self.assertEqual(net_item.causal_explanation, CausalExplanation.UNEXPLAINED)
+        self.assertIn("lack distinguishing attributes", net_item.epistemic_interpretation)
+
+        # Now test with discriminators (e.g. matching source port)
+        ptr_disc_a = EvidencePointer("rep_a", "/test/0", "summary", {"sport": 49152})
+        ptr_disc_b = EvidencePointer("rep_b", "/test/1", "summary", {"sport": 49152})
+        net_disc_a = NetworkObservation("rep_a", "TCP", "198.51.100.1", 443, ptr_disc_a)
+        net_disc_b = NetworkObservation("rep_b", "TCP", "198.51.100.1", 443, ptr_disc_b)
+        rep_disc_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, network_events=[net_disc_a])
+        rep_disc_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, network_events=[net_disc_b])
+        res_disc = EvidenceComparator(rep_disc_a, rep_disc_b).reconcile()
+        self.assertEqual(len(res_disc.reconciled_network), 1)
+        item_disc = res_disc.reconciled_network[0]
+        self.assertEqual(item_disc.cross_report_correlation, "DIRECT_IDENTIFIER_MATCH")
+        self.assertEqual(item_disc.causal_status, "CORROBORATED_SOCKET")
+        self.assertEqual(item_disc.causal_explanation, CausalExplanation.CORROBORATED_EXECUTION)
 
     def test_process_matching_order_independence(self):
         """
@@ -404,8 +422,9 @@ class TestEngineHardening(unittest.TestCase):
     def test_aggregate_network_endpoints_structured_fields(self):
         """
         Verify that repeated network streams without distinct discriminators receive
+        cross_report_correlation = 'AGGREGATE_ENDPOINT_CLUSTER',
         causal_status = 'AGGREGATE_ENDPOINT_CORROBORATION' and causal_explanation = UNEXPLAINED
-        in downstream structured fields, preventing false claims of 1-to-1 socket bijection.
+        in a single consolidated cluster record, preventing false claims of 1-to-1 socket bijection.
         """
         n_a1 = NetworkObservation("rep_a", "TCP", "203.0.113.5", 443, self.dummy_pointer)
         n_a2 = NetworkObservation("rep_a", "TCP", "203.0.113.5", 443, self.dummy_pointer)
@@ -417,12 +436,87 @@ class TestEngineHardening(unittest.TestCase):
 
         res = EvidenceComparator(rep_a, rep_b).reconcile()
 
-        # Both paired items must reflect aggregate endpoint corroboration without 1-to-1 socket claim
-        for n in res.reconciled_network:
-            self.assertEqual(n.cross_report_correlation, "AGGREGATE_ENDPOINT_CORROBORATION")
-            self.assertEqual(n.causal_status, "AGGREGATE_ENDPOINT_CORROBORATION")
-            self.assertEqual(n.causal_explanation, CausalExplanation.UNEXPLAINED)
-            self.assertIn("Specific stream-to-stream bijection is unestablished", n.epistemic_interpretation)
+        # Undifferentiated repeated items must be consolidated into an aggregate endpoint cluster
+        self.assertEqual(len(res.reconciled_network), 1)
+        cluster = res.reconciled_network[0]
+        self.assertEqual(cluster.cross_report_correlation, "AGGREGATE_ENDPOINT_CLUSTER")
+        self.assertEqual(cluster.causal_status, "AGGREGATE_ENDPOINT_CORROBORATION")
+        self.assertEqual(cluster.causal_explanation, CausalExplanation.UNEXPLAINED)
+        self.assertIn("lacking distinct source ports or timestamps", cluster.epistemic_interpretation)
+
+    def test_sample_hash_mismatch_flagged_with_limitation(self):
+        """
+        Verify that reports with different non-empty sample hashes trigger an explicit
+        SAMPLE_HASH_MISMATCH collection limitation, cross-sample prefix, and warning note.
+        """
+        hash_a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        hash_b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", hash_a, 60)
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", hash_b, 60)
+
+        res = EvidenceComparator(rep_a, rep_b).reconcile()
+        self.assertTrue(res.sample_sha256.startswith("CROSS_SAMPLE:"))
+        self.assertTrue(any("SAMPLE_HASH_MISMATCH" == lim.code for lim in res.collection_limitations["rep_a"]))
+        self.assertTrue(any("Cross-sample comparison" in note for note in res.epistemic_uncertainty_notes))
+
+    def test_missing_ancestry_does_not_trigger_disjoint_penalty(self):
+        """
+        Verify that missing ancestry in one report does NOT penalize a matching process down to 0.15.
+        Disjoint tree penalty must only fire when BOTH reports provide ancestors and they conflict.
+        """
+        # rep_a has lineage; rep_b has empty lineage (unrecorded ancestry)
+        p_a = ProcessObservation("rep_a", 100, 10, "calc.exe", "calc.exe /test", ["explorer.exe", "calc.exe"], 2, self.dummy_pointer)
+        p_b = ProcessObservation("rep_b", 200, None, "calc.exe", "calc.exe /test", [], 0, self.dummy_pointer)
+
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, processes=[p_a])
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, processes=[p_b])
+
+        res = EvidenceComparator(rep_a, rep_b).reconcile()
+        self.assertEqual(len(res.reconciled_processes), 1)
+        proc = res.reconciled_processes[0]
+        # Should score well above 0.15 disjoint penalty threshold (Image 0.35 + Args 0.35 = 0.70)
+        self.assertGreaterEqual(proc.heuristic_similarity_score, 0.70)
+
+    def test_competing_sibling_ambiguity_demotes_to_possible_match(self):
+        """
+        Verify that when two sibling nodes in Report A compete for the same Report B node
+        with close scores, reverse ambiguity detection flags the match as POSSIBLE_MATCH
+        rather than high-confidence MATCHED.
+        """
+        p_a1 = ProcessObservation("rep_a", 101, 10, "worker.exe", "worker.exe --pool worker", ["app.exe", "worker.exe"], 2, self.dummy_pointer)
+        p_a2 = ProcessObservation("rep_a", 102, 10, "worker.exe", "worker.exe --pool worker", ["app.exe", "worker.exe"], 2, self.dummy_pointer)
+        p_b1 = ProcessObservation("rep_b", 201, 20, "worker.exe", "worker.exe --pool worker", ["app.exe", "worker.exe"], 2, self.dummy_pointer)
+
+        rep_a = NormalizedReport("rep_a", "CAPE", "cape", "DOC", "h", 60, processes=[p_a1, p_a2])
+        rep_b = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", "h", 60, processes=[p_b1])
+
+        res = EvidenceComparator(rep_a, rep_b).reconcile()
+        matched = [p for p in res.reconciled_processes if p.observation_presence == ObservationPresence.OBSERVED_IN_BOTH]
+        self.assertEqual(len(matched), 1)
+        # Because p_a2 also competed for p_b1 with identical score, it must be flagged ambiguous
+        self.assertEqual(matched[0].confidence, ProcessMatchConfidence.POSSIBLE_MATCH)
+
+    def test_falcon_malformed_pid_receives_surrogate_no_collision(self):
+        """
+        Verify that Falcon parser assigns surrogate IDs when PID is missing or malformed,
+        preventing synthetic PID 0 collisions across distinct nodes.
+        """
+        from engine.parsers.falcon_parser import parse_falcon_report
+        data = {
+            "submission_info": {"sample_metadata": {"sha256": "abc"}},
+            "execution": {
+                "process_tree": [
+                    {"name": "proc_a.exe", "pid": "invalid_pid", "cmdline": "proc_a.exe"},
+                    {"name": "proc_b.exe", "cmdline": "proc_b.exe"}  # missing pid
+                ]
+            }
+        }
+        rep = parse_falcon_report(data, "test_rep")
+        self.assertEqual(len(rep.processes), 2)
+        pids = [p.source_pid for p in rep.processes]
+        self.assertNotIn(0, pids)
+        self.assertNotEqual(pids[0], pids[1])
+        self.assertTrue(all(pid >= 0x80000000 for pid in pids))
 
 
 if __name__ == "__main__":

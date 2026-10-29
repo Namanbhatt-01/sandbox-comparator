@@ -11,6 +11,7 @@ import re
 from typing import Dict, List, Optional, Set, Tuple
 from .models import (
     CausalExplanation,
+    CollectionLimitation,
     ComparisonReport,
     DroppedFileObservation,
     EvidencePointer,
@@ -23,6 +24,7 @@ from .models import (
     ReconciledNetworkItem,
     ReconciledProcessItem,
 )
+from .timing_benchmark import ExecutionBenchmark
 
 
 def tokenize_cmdline(cmd: str) -> Set[str]:
@@ -62,21 +64,50 @@ class EvidenceComparator:
             "All process match scores are heuristic similarity metrics, NOT calibrated confidence probabilities.",
             "All evidence addresses formatted as RFC 6901 JSON Pointers (/path/to/token).",
         ]
-        for lim in self.report_b.limitations:
+
+        hash_a = (self.report_a.sample_sha256 or "").lower().strip()
+        hash_b = (self.report_b.sample_sha256 or "").lower().strip()
+        is_cross_sample = bool(hash_a and hash_b and hash_a != hash_b)
+
+        lims_a = list(self.report_a.limitations)
+        lims_b = list(self.report_b.limitations)
+
+        if is_cross_sample:
+            mismatch_lim = CollectionLimitation(
+                report_id="COMPARATOR_CORE",
+                code="SAMPLE_HASH_MISMATCH",
+                description=(
+                    f"Input reports analyze different sample SHA-256 hashes "
+                    f"(Report A: '{hash_a}' vs Report B: '{hash_b}'). "
+                    f"Behavioral alignment reflects cross-sample heuristics, NOT same-sample execution reproducibility."
+                ),
+                category="INPUT_DIVERGENCE"
+            )
+            lims_a.append(mismatch_lim)
+            lims_b.append(mismatch_lim)
+            notes.insert(
+                0,
+                f"WARNING: Cross-sample comparison. Report A sample SHA-256 ('{hash_a}') does not match Report B ('{hash_b}'). Behavioral similarities indicate heuristic overlap, not identical binary provenance."
+            )
+            sample_sha256 = f"CROSS_SAMPLE: {hash_a[:12]}... != {hash_b[:12]}..."
+        else:
+            sample_sha256 = hash_a or hash_b
+
+        for lim in lims_b:
             notes.append(f"Report B Limitation [{lim.code}] ({lim.category}): {lim.description}")
-        for lim in self.report_a.limitations:
+        for lim in lims_a:
             notes.append(f"Report A Limitation [{lim.code}] ({lim.category}): {lim.description}")
 
         return ComparisonReport(
-            sample_sha256=self.report_a.sample_sha256 or self.report_b.sample_sha256,
+            sample_sha256=sample_sha256,
             report_a_id=self.report_a.report_id,
             report_b_id=self.report_b.report_id,
             reconciled_files=reconciled_files,
             reconciled_processes=reconciled_processes,
             reconciled_network=reconciled_network,
             collection_limitations={
-                self.report_a.report_id: self.report_a.limitations,
-                self.report_b.report_id: self.report_b.limitations,
+                self.report_a.report_id: lims_a,
+                self.report_b.report_id: lims_b,
             },
             epistemic_uncertainty_notes=notes,
             provenance_metadata={
@@ -368,8 +399,8 @@ class EvidenceComparator:
         else:
             arg_jaccard = 0.0
 
-        # Disjoint ancestry penalty (e.g. explorer.exe vs excel.exe parentage)
-        if (anc_a or anc_b) and anc_sim == 0.0:
+        # Disjoint ancestry penalty (only when BOTH processes have recorded ancestry and they actively conflict)
+        if (anc_a and anc_b) and anc_sim == 0.0:
             return 0.15, f"Disjoint ancestry tree: {anc_a} vs {anc_b}"
 
         # LOLBin divergent arguments penalty
@@ -413,6 +444,7 @@ class EvidenceComparator:
 
         # Step 1: Compute all pairwise similarity scores
         candidates_by_a: Dict[int, List[Tuple[int, float, str]]] = {i: [] for i in range(len(procs_a))}
+        candidates_by_b: Dict[int, List[Tuple[int, float, str]]] = {j: [] for j in range(len(procs_b))}
         all_candidate_pairs: List[Tuple[float, int, int, str]] = []
 
         for idx_a, p_a in enumerate(procs_a):
@@ -420,10 +452,13 @@ class EvidenceComparator:
                 score, rationale = self._score_process_pair(p_a, p_b)
                 if score >= 0.45:
                     candidates_by_a[idx_a].append((idx_b, score, rationale))
+                    candidates_by_b[idx_b].append((idx_a, score, rationale))
                     all_candidate_pairs.append((score, idx_a, idx_b, rationale))
 
         for idx_a in candidates_by_a:
             candidates_by_a[idx_a].sort(key=lambda x: x[1], reverse=True)
+        for idx_b in candidates_by_b:
+            candidates_by_b[idx_b].sort(key=lambda x: x[1], reverse=True)
 
         # Step 2: Greedy score-sorted bipartite matching with anchor preservation (highest scores matched first)
         # Deterministic tie-breaking on intrinsic attributes ensures order independence
@@ -475,6 +510,12 @@ class EvidenceComparator:
                         "rationale": c_rat,
                         "claimed_by_other": c_idx in matched_b_indices and c_idx != best_idx_b
                     })
+
+                # Check reverse competition (another node in A competing for the same node in B)
+                b_cands = candidates_by_b.get(best_idx_b, [])
+                for other_a_idx, other_score, _ in b_cands:
+                    if other_a_idx != idx_a and abs(best_score - other_score) < 0.15:
+                        is_ambiguous = True
 
                 if best_score >= 0.80 and not is_ambiguous:
                     confidence = ProcessMatchConfidence.MATCHED
@@ -636,14 +677,19 @@ class EvidenceComparator:
             unmatched_b: List[NetworkObservation] = []
 
             if len(list_a) == 1 and len(list_b) == 1:
-                pairs.append((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH", True))
+                score, has_disc = self._score_network_pair(list_a[0], list_b[0])
+                if has_disc and score > 0.0:
+                    pairs.append((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH", True))
+                else:
+                    pairs.append((list_a[0], list_b[0], "SINGLETON_ENDPOINT_OVERLAP", False))
             elif len(list_a) > 0 and len(list_b) > 0:
                 # Pairwise matching among repeated connections using discriminating attributes
                 candidate_pairs = []
                 for i_a, na in enumerate(list_a):
                     for i_b, nb in enumerate(list_b):
                         score, has_disc = self._score_network_pair(na, nb)
-                        candidate_pairs.append((score, has_disc, i_a, i_b))
+                        if has_disc and score > 0.0:
+                            candidate_pairs.append((score, has_disc, i_a, i_b))
 
                 # Sort candidates by score descending
                 candidate_pairs.sort(key=lambda x: x[0], reverse=True)
@@ -655,11 +701,42 @@ class EvidenceComparator:
                         continue
                     used_a.add(i_a)
                     used_b.add(i_b)
-                    corr = "DIRECT_IDENTIFIER_MATCH" if (has_disc and score > 0.0) else "AGGREGATE_ENDPOINT_CORROBORATION"
-                    pairs.append((list_a[i_a], list_b[i_b], corr, has_disc))
+                    pairs.append((list_a[i_a], list_b[i_b], "DIRECT_IDENTIFIER_MATCH", True))
 
-                unmatched_a = [list_a[i] for i in range(len(list_a)) if i not in used_a]
-                unmatched_b = [list_b[i] for i in range(len(list_b)) if i not in used_b]
+                rem_a = [list_a[i] for i in range(len(list_a)) if i not in used_a]
+                rem_b = [list_b[i] for i in range(len(list_b)) if i not in used_b]
+
+                if rem_a and rem_b:
+                    cluster_links = {
+                        self.report_a.report_id: rem_a[0].evidence,
+                        self.report_b.report_id: rem_b[0].evidence
+                    }
+                    results.append(
+                        ReconciledNetworkItem(
+                            connection_key=key,
+                            observation_presence=ObservationPresence.OBSERVED_IN_BOTH,
+                            observation_type="TELEMETRY_LOGGED_SOCKET_RECORD",
+                            connection_state="SOCKET_RECORD_LOGGED",
+                            policy_decision=None,
+                            cross_report_correlation="AGGREGATE_ENDPOINT_CLUSTER",
+                            causal_status="AGGREGATE_ENDPOINT_CORROBORATION",
+                            causal_explanation=CausalExplanation.UNEXPLAINED,
+                            policy_decision_record=None,
+                            policy_decision_evidence=None,
+                            observed_in_reports=[self.report_a.report_id, self.report_b.report_id],
+                            unobserved_in_reports=[],
+                            evidence_links=cluster_links,
+                            epistemic_interpretation=(
+                                f"Endpoint '{key}' logged multiple socket records ({len(rem_a)} in {self.report_a.report_id}, "
+                                f"{len(rem_b)} in {self.report_b.report_id}) lacking distinct source ports or timestamps. "
+                                f"Records are grouped into a single aggregate destination cluster rather than arbitrary one-to-one stream pairings."
+                            )
+                        )
+                    )
+                elif rem_a:
+                    unmatched_a = rem_a
+                elif rem_b:
+                    unmatched_b = rem_b
             else:
                 unmatched_a = list(list_a)
                 unmatched_b = list(list_b)
@@ -678,6 +755,15 @@ class EvidenceComparator:
                         f"Socket observation '{key}' corroborated across both reports with matching connection attributes. "
                         f"Telemetry confirms both environments logged socket activity; does not establish "
                         f"full application-layer handshake completion or identical payload transmission without packet-level capture."
+                    )
+                elif cross_corr == "SINGLETON_ENDPOINT_OVERLAP":
+                    obs_presence = ObservationPresence.OBSERVED_IN_BOTH
+                    causal = CausalExplanation.UNEXPLAINED
+                    causal_stat = "ENDPOINT_MATCH"
+                    interpretation = (
+                        f"Endpoint '{key}' logged once in each report, but records lack distinguishing attributes "
+                        f"(e.g., ephemeral source port, PID, or timestamp) to confirm an identical socket session. "
+                        f"Treat as endpoint overlap rather than a verified stream-level match."
                     )
                 else:
                     obs_presence = ObservationPresence.OBSERVED_IN_BOTH

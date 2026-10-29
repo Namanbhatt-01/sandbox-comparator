@@ -9,19 +9,20 @@ This directory documents the comprehensive verification, regression, fuzzing, an
 The test architecture ensures scientific integrity, algorithmic correctness, cross-language parity, and defense against hostile payloads.
 
 ```
-Total Automated Tests: 38 (34 Python/DOM + 4 Rust Parity)
+Total Automated Tests: 68 (50 Python + 13 Rust Parity + 5 DOM XSS)
 ```
 
 | Test Suite File | Type | Test Count | Focus Area |
 | :--- | :--- | :--- | :--- |
-| [`test_fuzzing_and_security.py`](test_fuzzing_and_security.py) | Security / Fuzzing | 5 tests | Malformed JSON types, adversarial `<script>`/`<img>` payloads, API error sanitization, JSDOM execution |
-| [`test_engine_hardening.py`](test_engine_hardening.py) | Engine / Correctness | 6 tests | SHA-256 deduplication, network attribution honesty, order-independent bipartite matching |
+| [`test_fuzzing_and_security.py`](test_fuzzing_and_security.py) | Security / Fuzzing | 7 tests | Malformed JSON types, adversarial `<script>`/`<img>` payloads, API error sanitization, surrogate PID injection |
+| [`test_engine_hardening.py`](test_engine_hardening.py) | Engine / Correctness | 16 tests | SHA-256 deduplication, network attribution honesty, greedy bipartite order-independence, sample hash mismatch, ancestry penalty calibration, sibling competition |
 | [`test_real_cape_ingestion.py`](test_real_cape_ingestion.py) | Parser / Integration | 4 tests | Authentic native CAPE v2.2 export ingestion, RFC 6901 pointer resolution |
-| [`test_calibration_and_semantics.py`](test_calibration_and_semantics.py) | Algorithm / Forensics | 7 tests | Heuristic similarity weighting, disentangled dimension verification |
+| [`test_calibration_and_semantics.py`](test_calibration_and_semantics.py) | Algorithm / Forensics | 5 tests | Heuristic similarity weighting, disentangled dimension verification |
 | [`test_holdout_and_provenance.py`](test_holdout_and_provenance.py) | Scientific / Calibration | 6 tests | Held-out validation corpus, Clopper-Pearson 95% confidence intervals |
-| [`test_prototype.py`](test_prototype.py) | Regression | 6 tests | Baseline pipeline end-to-end reconciliation and markdown export |
-| [`test_dom_xss.js`](test_dom_xss.js) | Browser Security | 1 suite (4 tables) | WHATWG DOM tree inspection, zero script execution, numeric onclick verification |
-| [`rust/tests/test_parity.rs`](../rust/tests/test_parity.rs) | Parity / Rust | 4 tests | Bit-for-bit parity between Python and Rust engines across scenarios X and Y |
+| [`test_prototype.py`](test_prototype.py) | Regression | 8 tests | Baseline pipeline end-to-end reconciliation and markdown export |
+| [`test_cli_verdict.py`](test_cli_verdict.py) | CLI / Classification | 4 tests | Behavioral classification verdicts and cross-sample banners |
+| [`test_dom_xss.js`](test_dom_xss.js) | Browser Security | 1 suite (5 tests) | WHATWG DOM tree inspection, zero script execution, numeric onclick verification |
+| [`rust/tests/test_parity.rs`](../rust/tests/test_parity.rs) | Parity / Rust | 13 tests | Parity between Python and Rust engines: hash mismatch, ancestry tolerance, network clustering, sibling ambiguity, Scenarios X and Y |
 
 ---
 

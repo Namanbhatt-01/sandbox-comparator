@@ -52,6 +52,8 @@ def format_markdown_report(comparison, vt_eval=None) -> str:
     lines = []
     lines.append(f"# Evidence-Aware Sandbox Comparison Report")
     lines.append(f"**Target Sample SHA-256**: `{comparison.sample_sha256}`\n")
+    if str(comparison.sample_sha256).startswith("CROSS_SAMPLE:"):
+        lines.append("> [!WARNING] **Cross-Sample Comparison**: Input reports analyze different malware sample hashes. Behavioral alignments indicate heuristic overlap, not same-sample execution reproducibility.\n")
     
     meta_a = comparison.provenance_metadata.get(comparison.report_a_id, {})
     meta_b = comparison.provenance_metadata.get(comparison.report_b_id, {})

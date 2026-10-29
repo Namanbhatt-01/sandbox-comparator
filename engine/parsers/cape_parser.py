@@ -140,10 +140,18 @@ def parse_cape_report(raw: Optional[Dict[str, Any]], report_id: str = "report_a_
     for idx, proc in enumerate(raw_processes):
         if not isinstance(proc, dict):
             continue
+        raw_pid = proc.get("process_id")
         try:
-            pid = int(proc.get("process_id", 0))
+            pid = int(raw_pid) if raw_pid is not None else None
         except (ValueError, TypeError):
-            pid = 0
+            pid = None
+
+        if pid is None or pid <= 0:
+            surrogate_pid = 0x80000000 + idx + 1
+            norm_report.parser_warnings.append(
+                f"CAPE process at index {idx} missing or non-positive process_id ({raw_pid!r}); assigned surrogate ID {surrogate_pid}"
+            )
+            pid = surrogate_pid
 
         parent_raw = proc.get("parent_id")
         ppid = int(parent_raw) if parent_raw is not None and str(parent_raw).isdigit() else None

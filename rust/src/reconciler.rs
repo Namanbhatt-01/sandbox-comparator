@@ -1,8 +1,8 @@
 use crate::models::{
-    CausalExplanation, ComparisonReport, DroppedFileObservation, EvidencePointer,
-    NetworkObservation, NormalizedReport, ObservationPresence, ProcessAlternativeCandidate,
-    ProcessMatchConfidence, ProcessObservation, ReconciledFileItem, ReconciledNetworkItem,
-    ReconciledProcessItem,
+    CausalExplanation, CollectionLimitation, ComparisonReport, DroppedFileObservation,
+    EvidencePointer, NetworkObservation, NormalizedReport, ObservationPresence,
+    ProcessAlternativeCandidate, ProcessMatchConfidence, ProcessObservation, ReconciledFileItem,
+    ReconciledNetworkItem, ReconciledProcessItem,
 };
 use crate::provenance::truncate_utf8;
 use std::collections::{BTreeMap, HashSet};
@@ -66,6 +66,41 @@ impl<'a> EvidenceComparator<'a> {
             "All evidence addresses formatted as RFC 6901 JSON Pointers (/path/to/token).".to_string(),
         ];
 
+        let hash_a = self.report_a.sample_sha256.trim().to_ascii_lowercase();
+        let hash_b = self.report_b.sample_sha256.trim().to_ascii_lowercase();
+        let is_cross_sample = !hash_a.is_empty() && !hash_b.is_empty() && hash_a != hash_b;
+
+        let mut lims_a = self.report_a.limitations.clone();
+        let mut lims_b = self.report_b.limitations.clone();
+
+        let sample_sha256 = if is_cross_sample {
+            let mismatch_lim = CollectionLimitation {
+                report_id: "COMPARATOR_CORE".to_string(),
+                code: "SAMPLE_HASH_MISMATCH".to_string(),
+                description: format!(
+                    "Input reports analyze different sample SHA-256 hashes ('{}' vs '{}'). Behavioral alignment reflects cross-sample heuristics, NOT same-sample execution reproducibility.",
+                    hash_a, hash_b
+                ),
+                category: "INPUT_DIVERGENCE".to_string(),
+                target_pattern: None,
+                evidence: None,
+            };
+            lims_a.push(mismatch_lim.clone());
+            lims_b.push(mismatch_lim);
+            notes.insert(
+                0,
+                format!(
+                    "WARNING: Cross-sample comparison. Report A sample SHA-256 ('{}') does not match Report B ('{}'). Behavioral similarities indicate heuristic overlap, not identical binary provenance.",
+                    hash_a, hash_b
+                ),
+            );
+            format!("CROSS_SAMPLE: {}... != {}...", &hash_a[..hash_a.len().min(12)], &hash_b[..hash_b.len().min(12)])
+        } else if !hash_a.is_empty() {
+            hash_a
+        } else {
+            hash_b
+        };
+
         for lim in &self.report_b.limitations {
             notes.push(format!(
                 "Report B Limitation [{}] ({}): {}",
@@ -80,8 +115,8 @@ impl<'a> EvidenceComparator<'a> {
         }
 
         let mut limitations = BTreeMap::new();
-        limitations.insert(self.report_a.report_id.clone(), self.report_a.limitations.clone());
-        limitations.insert(self.report_b.report_id.clone(), self.report_b.limitations.clone());
+        limitations.insert(self.report_a.report_id.clone(), lims_a);
+        limitations.insert(self.report_b.report_id.clone(), lims_b);
 
         let mut provenance_metadata = BTreeMap::new();
         provenance_metadata.insert(
@@ -102,12 +137,6 @@ impl<'a> EvidenceComparator<'a> {
                 "parser_warnings": self.report_b.parser_warnings
             }),
         );
-
-        let sample_sha256 = if !self.report_a.sample_sha256.is_empty() {
-            self.report_a.sample_sha256.clone()
-        } else {
-            self.report_b.sample_sha256.clone()
-        };
 
         ComparisonReport {
             sample_sha256,
@@ -509,9 +538,15 @@ impl<'a> EvidenceComparator<'a> {
             0.0
         };
 
-        // Disjoint ancestry penalty
-        if (!anc_a.is_empty() || !anc_b.is_empty()) && anc_sim == 0.0 {
-            return (0.15, format!("Disjoint ancestry tree: {:?} vs {:?}", anc_a, anc_b));
+        // Disjoint ancestry penalty: only apply if BOTH processes report ancestors
+        // and they actively conflict (anc_sim == 0.0). If one sandbox omits parentage,
+        // it is unrecorded ancestry, not an active contradiction.
+        if (!anc_a.is_empty() && !anc_b.is_empty()) && anc_sim == 0.0 {
+            let mut list_a: Vec<String> = anc_a.into_iter().collect();
+            let mut list_b: Vec<String> = anc_b.into_iter().collect();
+            list_a.sort();
+            list_b.sort();
+            return (0.15, format!("Disjoint ancestry tree: {:?} vs {:?}", list_a, list_b));
         }
 
         // LOLBin divergent arguments penalty
@@ -570,6 +605,7 @@ impl<'a> EvidenceComparator<'a> {
 
         // Step 1: Pairwise scoring
         let mut candidates_by_a: Vec<Vec<(usize, f64, String)>> = vec![Vec::new(); procs_a.len()];
+        let mut candidates_by_b: Vec<Vec<(usize, f64, String)>> = vec![Vec::new(); procs_b.len()];
         let mut all_candidate_pairs: Vec<(f64, usize, usize, String)> = Vec::new();
 
         for (idx_a, p_a) in procs_a.iter().enumerate() {
@@ -577,12 +613,16 @@ impl<'a> EvidenceComparator<'a> {
                 let (score, rationale) = self.score_process_pair(p_a, p_b);
                 if score >= 0.45 {
                     candidates_by_a[idx_a].push((idx_b, score, rationale.clone()));
+                    candidates_by_b[idx_b].push((idx_a, score, rationale.clone()));
                     all_candidate_pairs.push((score, idx_a, idx_b, rationale));
                 }
             }
         }
 
         for list in &mut candidates_by_a {
+            list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        }
+        for list in &mut candidates_by_b {
             list.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         }
 
@@ -645,6 +685,13 @@ impl<'a> EvidenceComparator<'a> {
                             score: c_score,
                             rationale: c_rat.clone(),
                         });
+                    }
+
+                    // Check reverse competition (other Report A candidates competing for the SAME Report B node)
+                    for &(other_a_idx, other_score, _) in candidates_by_b[best_idx_b].iter() {
+                        if other_a_idx != idx_a && (best_score - other_score).abs() < 0.15 {
+                            is_ambiguous = true;
+                        }
                     }
 
                     if best_score >= 0.80 && !is_ambiguous {
@@ -842,17 +889,25 @@ impl<'a> EvidenceComparator<'a> {
             let list_b = net_b_by_key.get(&key).cloned().unwrap_or_default();
 
             let mut pairs = Vec::new();
+            let mut cluster_records = Vec::new();
             let mut unmatched_a = Vec::new();
             let mut unmatched_b = Vec::new();
 
             if list_a.len() == 1 && list_b.len() == 1 {
-                pairs.push((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH".to_string(), true));
+                let (score, has_disc) = self.score_network_pair(list_a[0], list_b[0]);
+                if has_disc && score > 0.0 {
+                    pairs.push((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH".to_string(), true));
+                } else {
+                    pairs.push((list_a[0], list_b[0], "SINGLETON_ENDPOINT_OVERLAP".to_string(), false));
+                }
             } else if !list_a.is_empty() && !list_b.is_empty() {
                 let mut candidates = Vec::new();
                 for (i_a, na) in list_a.iter().enumerate() {
                     for (i_b, nb) in list_b.iter().enumerate() {
                         let (score, has_disc) = self.score_network_pair(na, nb);
-                        candidates.push((score, has_disc, i_a, i_b));
+                        if has_disc && score > 0.0 {
+                            candidates.push((score, has_disc, i_a, i_b));
+                        }
                     }
                 }
 
@@ -860,29 +915,23 @@ impl<'a> EvidenceComparator<'a> {
 
                 let mut used_a = HashSet::new();
                 let mut used_b = HashSet::new();
-                for (score, has_disc, i_a, i_b) in candidates {
+                for (_score, has_disc, i_a, i_b) in candidates {
                     if used_a.contains(&i_a) || used_b.contains(&i_b) {
                         continue;
                     }
                     used_a.insert(i_a);
                     used_b.insert(i_b);
-                    let corr = if has_disc && score > 0.0 {
-                        "DIRECT_IDENTIFIER_MATCH".to_string()
-                    } else {
-                        "AGGREGATE_ENDPOINT_CORROBORATION".to_string()
-                    };
-                    pairs.push((list_a[i_a], list_b[i_b], corr, has_disc));
+                    pairs.push((list_a[i_a], list_b[i_b], "DIRECT_IDENTIFIER_MATCH".to_string(), has_disc));
                 }
 
-                for (i_a, na) in list_a.iter().enumerate() {
-                    if !used_a.contains(&i_a) {
-                        unmatched_a.push(*na);
-                    }
-                }
-                for (i_b, nb) in list_b.iter().enumerate() {
-                    if !used_b.contains(&i_b) {
-                        unmatched_b.push(*nb);
-                    }
+                let rem_a: Vec<&NetworkObservation> = list_a.iter().enumerate().filter(|(i, _)| !used_a.contains(i)).map(|(_, n)| *n).collect();
+                let rem_b: Vec<&NetworkObservation> = list_b.iter().enumerate().filter(|(i, _)| !used_b.contains(i)).map(|(_, n)| *n).collect();
+
+                if !rem_a.is_empty() && !rem_b.is_empty() {
+                    cluster_records.push((rem_a, rem_b));
+                } else {
+                    unmatched_a.extend(rem_a);
+                    unmatched_b.extend(rem_b);
                 }
             } else {
                 unmatched_a.extend(list_a);
@@ -896,24 +945,20 @@ impl<'a> EvidenceComparator<'a> {
 
                 let interp = if cross_corr == "DIRECT_IDENTIFIER_MATCH" {
                     format!(
-                        "Socket observation '{}' corroborated across both reports with matching connection attributes. Telemetry confirms both environments logged socket activity; does not establish full application-layer handshake completion or identical payload transmission without packet-level capture.",
+                        "Socket observation '{}' corroborated across both reports with matching connection attributes (source port, PID, or timestamp). Telemetry confirms both environments logged matching socket activity; does not establish full application-layer handshake completion or identical payload transmission without packet-level capture.",
                         key
                     )
                 } else {
                     format!(
-                        "Endpoint '{}' logged multiple socket records ({} in {}, {} in {}). Specific stream-to-stream bijection is unestablished due to lack of distinct source ports or timestamps; aggregate traffic to destination is corroborated.",
-                        key,
-                        net_a_by_key.get(&key).map(|v| v.len()).unwrap_or(0),
-                        self.report_a.report_id,
-                        net_b_by_key.get(&key).map(|v| v.len()).unwrap_or(0),
-                        self.report_b.report_id
+                        "Endpoint '{}' logged once in each report, but records lack distinguishing attributes (e.g., ephemeral source port, PID, or timestamp) to confirm an identical socket session. Treat as endpoint overlap rather than a verified stream-level match.",
+                        key
                     )
                 };
 
                 let (causal, causal_stat) = if cross_corr == "DIRECT_IDENTIFIER_MATCH" {
                     (CausalExplanation::CORROBORATED_EXECUTION, "CORROBORATED_SOCKET".to_string())
                 } else {
-                    (CausalExplanation::UNEXPLAINED, "AGGREGATE_ENDPOINT_CORROBORATION".to_string())
+                    (CausalExplanation::UNEXPLAINED, "ENDPOINT_MATCH".to_string())
                 };
 
                 results.push(ReconciledNetworkItem {
@@ -925,6 +970,38 @@ impl<'a> EvidenceComparator<'a> {
                     cross_report_correlation: cross_corr,
                     causal_status: causal_stat,
                     causal_explanation: causal,
+                    policy_decision_record: None,
+                    policy_decision_evidence: None,
+                    epistemic_interpretation: interp,
+                    observed_in_reports: vec![self.report_a.report_id.clone(), self.report_b.report_id.clone()],
+                    unobserved_in_reports: Vec::new(),
+                    evidence_links,
+                });
+            }
+
+            for (rem_a, rem_b) in cluster_records {
+                let mut evidence_links = BTreeMap::new();
+                evidence_links.insert(self.report_a.report_id.clone(), rem_a[0].evidence.clone());
+                evidence_links.insert(self.report_b.report_id.clone(), rem_b[0].evidence.clone());
+
+                let interp = format!(
+                    "Endpoint '{}' logged multiple socket records ({} in {}, {} in {}) lacking distinct source ports or timestamps. Records are grouped into a single aggregate destination cluster rather than arbitrary one-to-one stream pairings.",
+                    key,
+                    rem_a.len(),
+                    self.report_a.report_id,
+                    rem_b.len(),
+                    self.report_b.report_id
+                );
+
+                results.push(ReconciledNetworkItem {
+                    connection_key: key.clone(),
+                    observation_presence: ObservationPresence::OBSERVED_IN_BOTH,
+                    observation_type: "TELEMETRY_LOGGED_SOCKET_RECORD".to_string(),
+                    connection_state: "SOCKET_RECORD_LOGGED".to_string(),
+                    policy_decision: None,
+                    cross_report_correlation: "AGGREGATE_ENDPOINT_CLUSTER".to_string(),
+                    causal_status: "AGGREGATE_ENDPOINT_CORROBORATION".to_string(),
+                    causal_explanation: CausalExplanation::UNEXPLAINED,
                     policy_decision_record: None,
                     policy_decision_evidence: None,
                     epistemic_interpretation: interp,

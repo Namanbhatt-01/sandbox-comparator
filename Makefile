@@ -43,7 +43,7 @@ compare:
 	python3 cli.py --report-a data/report_format_a_cape.json --report-b data/report_format_b_falcon.json
 
 benchmark:
-	python3 -c "from engine.reconciler import ExecutionBenchmark; b = ExecutionBenchmark.run_benchmark(50); print('Mean runtime:', b['end_to_end_runtime_ms']['mean'], 'ms')"
+	python3 scripts/run_benchmarks.py
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

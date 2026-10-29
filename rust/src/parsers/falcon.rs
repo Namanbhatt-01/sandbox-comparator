@@ -120,10 +120,23 @@ pub fn parse_falcon_report(raw: &Value, report_id: &str) -> NormalizedReport {
         norm_report: &mut NormalizedReport,
     ) {
         if let Some(obj) = node.as_object() {
-            let pid = obj
-                .get("pid")
-                .and_then(|v| v.as_u64().map(|n| n as u32).or_else(|| v.as_str().and_then(|s| s.parse::<u32>().ok())))
-                .unwrap_or(0);
+            let raw_pid_val = obj.get("pid");
+            let parsed_pid = raw_pid_val
+                .and_then(|v| v.as_u64().map(|n| n as u32).or_else(|| v.as_str().and_then(|s| s.parse::<u32>().ok())));
+
+            let pid = match parsed_pid {
+                Some(p) if p > 0 => p,
+                _ => {
+                    let surrogate = 0x8000_0000 + norm_report.processes.len() as u32 + 1;
+                    norm_report.parser_warnings.push(format!(
+                        "Falcon process '{}' missing or malformed PID ({:?}); assigned surrogate ID {}",
+                        obj.get("name").and_then(|v| v.as_str()).unwrap_or("unknown"),
+                        raw_pid_val,
+                        surrogate
+                    ));
+                    surrogate
+                }
+            };
 
             let ppid = obj.get("ppid").and_then(|v| {
                 v.as_u64()

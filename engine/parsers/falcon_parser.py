@@ -92,11 +92,17 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
     def traverse_node(node: Dict[str, Any], parent_lineage: List[str], token_path: List[Union[str, int]]):
         if not isinstance(node, dict):
             return
+        raw_pid = node.get("pid")
         try:
-            pid = int(node.get("pid", 0))
+            pid = int(raw_pid) if raw_pid is not None else None
         except (ValueError, TypeError):
-            pid = 0
-            norm_report.parser_warnings.append(f"Non-integer pid in process tree: {node.get('pid')}")
+            pid = None
+
+        if pid is None:
+            pid = 0x80000000 + len(norm_report.processes) + 1
+            norm_report.parser_warnings.append(
+                f"Missing or non-integer pid '{raw_pid}' in process tree; assigned surrogate identifier {pid}"
+            )
 
         parent_raw = node.get("ppid")
         ppid = int(parent_raw) if parent_raw is not None and str(parent_raw).isdigit() else None

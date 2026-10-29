@@ -53,7 +53,7 @@ Sandbox Comparator is offered under a transparent, utility-grounded licensing mo
 - **Capabilities**:
   - Full CLI (`sandbox-comparator`) and interactive local web interface (`http://127.0.0.1:8000`).
   - Ingestion for CAPE Sandbox v2.x, Falcon Sandbox Cloud Engine (synthetic v7.x), and generic schemas.
-  - Global maximum-weight bipartite process matching with ambiguity detection.
+  - Greedy score-sorted bipartite process matching with anchor preservation and ambiguity detection.
   - RFC 6901 JSON pointer generation.
   - Markdown report export.
   - 100% offline-first execution with zero external network connectivity.

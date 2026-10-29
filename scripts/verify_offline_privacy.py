@@ -68,28 +68,32 @@ def verify_network_binding():
 
 
 def verify_backend_telemetry():
-    print("[3/3] Verifying zero outbound network calls in engine and web app...")
+    print("[3/3] Verifying zero outbound network calls in engine, Rust core, and web app...")
     forbidden_terms = [
         "requests.post", "requests.get", "urllib.request.urlopen",
-        "httpx.post", "httpx.get", "sentry_sdk", "mixpanel", "analytics.track"
+        "httpx.post", "httpx.get", "sentry_sdk", "mixpanel", "analytics.track",
+        "reqwest", "hyper::", "ureq::", "curl::"
     ]
     
     python_files = list(BASE_DIR.glob("engine/**/*.py")) + [APP_PY]
-    for p in python_files:
+    rust_files = list(BASE_DIR.glob("rust/src/**/*.rs"))
+    all_files = python_files + rust_files
+
+    for p in all_files:
         with open(p, "r", encoding="utf-8") as f:
             code = f.read()
         for term in forbidden_terms:
             if term in code:
-                print(f"  FAIL: Found unexpected outbound network call '{term}' in {p.name}!")
+                print(f"  FAIL: Found unexpected outbound network call or dependency '{term}' in {p.name}!")
                 return False
 
-    print("  PASS: Zero outbound network client calls found in engine or backend.")
+    print("  PASS: Zero outbound network client calls or dependencies found across Python and Rust sources.")
     return True
 
 
 def main():
     print("=" * 60)
-    print("Sandbox Comparator: Offline-First Privacy & Air-Gap Audit")
+    print("Sandbox Comparator: Offline Privacy & Asset Audit")
     print("=" * 60)
 
     ok1 = verify_html_air_gap()
@@ -98,7 +102,7 @@ def main():
 
     print("=" * 60)
     if ok1 and ok2 and ok3:
-        print("RESULT: ALL AUDITS PASSED. Air-gapped zero-egress posture confirmed.")
+        print("RESULT: PASS: Static audit verified zero remote HTTP/CDN dependencies or outbound telemetry clients across Python and Rust sources. Local dashboard defaults strictly to loopback (127.0.0.1).")
         sys.exit(0)
     else:
         print("RESULT: AUDIT FAILED. Review issues above.")

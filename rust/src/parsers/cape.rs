@@ -205,10 +205,21 @@ pub fn parse_cape_report(raw: &Value, report_id: &str) -> NormalizedReport {
         }
 
         for (idx, proc) in procs.iter().enumerate() {
-            let pid = proc
-                .get("process_id")
-                .and_then(|v| v.as_u64().map(|n| n as u32).or_else(|| v.as_str().and_then(|s| s.parse::<u32>().ok())))
-                .unwrap_or(0);
+            let raw_pid_val = proc.get("process_id");
+            let parsed_pid = raw_pid_val
+                .and_then(|v| v.as_u64().map(|n| n as u32).or_else(|| v.as_str().and_then(|s| s.parse::<u32>().ok())));
+
+            let pid = match parsed_pid {
+                Some(p) if p > 0 => p,
+                _ => {
+                    let surrogate = 0x8000_0000 + idx as u32 + 1;
+                    norm_report.parser_warnings.push(format!(
+                        "CAPE process at index {} missing or non-positive process_id ({:?}); assigned surrogate ID {}",
+                        idx, raw_pid_val, surrogate
+                    ));
+                    surrogate
+                }
+            };
 
             let ppid = proc.get("parent_id").and_then(|v| {
                 v.as_u64()

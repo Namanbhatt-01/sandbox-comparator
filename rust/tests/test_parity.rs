@@ -720,3 +720,313 @@ fn test_unrelated_root_processes_with_empty_cli_do_not_match_parity() {
         assert_eq!(p.confidence, ProcessMatchConfidence::UNRESOLVED);
     }
 }
+
+#[test]
+fn test_sample_hash_mismatch_parity() {
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res = EvidenceComparator::new(&norm_a, &norm_b).reconcile();
+    assert!(res.sample_sha256.starts_with("CROSS_SAMPLE:"));
+    let lims_a = res.collection_limitations.get("rep_a").unwrap();
+    assert!(lims_a.iter().any(|l| l.code == "SAMPLE_HASH_MISMATCH"));
+    assert!(res.epistemic_uncertainty_notes.iter().any(|n| n.contains("Cross-sample comparison")));
+}
+
+#[test]
+fn test_missing_ancestry_does_not_trigger_disjoint_penalty_parity() {
+    let dummy_ptr = EvidencePointer {
+        report_id: "rep".to_string(),
+        json_pointer: "/ptr".to_string(),
+        event_summary: "sum".to_string(),
+        is_available: true,
+        missing_reason: None,
+        raw_snippet: serde_json::json!({}),
+    };
+    let p_a = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 100,
+        source_ppid: Some(10),
+        image_name: "calc.exe".to_string(),
+        command_line: "calc.exe /test".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "calc.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_b = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 200,
+        source_ppid: None,
+        image_name: "calc.exe".to_string(),
+        command_line: "calc.exe /test".to_string(),
+        lineage_path: Vec::new(),
+        tree_depth: 0,
+        evidence: dummy_ptr.clone(),
+    };
+
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_a],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_b],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res = EvidenceComparator::new(&norm_a, &norm_b).reconcile();
+    assert_eq!(res.reconciled_processes.len(), 1);
+    let p = &res.reconciled_processes[0];
+    assert!(p.heuristic_similarity_score >= 0.70);
+}
+
+#[test]
+fn test_singleton_and_repeated_network_honest_semantics_parity() {
+    let dummy_ptr = EvidencePointer {
+        report_id: "rep".to_string(),
+        json_pointer: "/ptr".to_string(),
+        event_summary: "sum".to_string(),
+        is_available: true,
+        missing_reason: None,
+        raw_snippet: serde_json::json!({}),
+    };
+
+    // 1. Singleton without discriminators
+    let n_a = NetworkObservation {
+        report_id: "rep_a".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "198.51.100.1".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr.clone(),
+    };
+    let n_b = NetworkObservation {
+        report_id: "rep_b".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "198.51.100.1".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr.clone(),
+    };
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![n_a],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![n_b],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res = EvidenceComparator::new(&norm_a, &norm_b).reconcile();
+    assert_eq!(res.reconciled_network.len(), 1);
+    let item = &res.reconciled_network[0];
+    assert_eq!(item.cross_report_correlation, "SINGLETON_ENDPOINT_OVERLAP");
+    assert_eq!(item.causal_status, "ENDPOINT_MATCH");
+    assert_eq!(item.causal_explanation, CausalExplanation::UNEXPLAINED);
+
+    // 2. Repeated undifferentiated network events
+    let n_a1 = NetworkObservation {
+        report_id: "rep_a".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.5".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr.clone(),
+    };
+    let n_a2 = NetworkObservation {
+        report_id: "rep_a".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.5".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr.clone(),
+    };
+    let n_b1 = NetworkObservation {
+        report_id: "rep_b".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.5".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr.clone(),
+    };
+    let n_b2 = NetworkObservation {
+        report_id: "rep_b".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "203.0.113.5".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr.clone(),
+    };
+
+    let norm_rep_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![n_a1, n_a2],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_rep_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![n_b1, n_b2],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res_rep = EvidenceComparator::new(&norm_rep_a, &norm_rep_b).reconcile();
+    assert_eq!(res_rep.reconciled_network.len(), 1);
+    let cluster = &res_rep.reconciled_network[0];
+    assert_eq!(cluster.cross_report_correlation, "AGGREGATE_ENDPOINT_CLUSTER");
+    assert_eq!(cluster.causal_status, "AGGREGATE_ENDPOINT_CORROBORATION");
+    assert_eq!(cluster.causal_explanation, CausalExplanation::UNEXPLAINED);
+}
+
+#[test]
+fn test_competing_sibling_ambiguity_demotes_to_possible_match_parity() {
+    let dummy_ptr = EvidencePointer {
+        report_id: "rep".to_string(),
+        json_pointer: "/ptr".to_string(),
+        event_summary: "sum".to_string(),
+        is_available: true,
+        missing_reason: None,
+        raw_snippet: serde_json::json!({}),
+    };
+
+    let p_a1 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 101,
+        source_ppid: Some(10),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --pool worker".to_string(),
+        lineage_path: vec!["app.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_a2 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 102,
+        source_ppid: Some(10),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --pool worker".to_string(),
+        lineage_path: vec!["app.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_b1 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 201,
+        source_ppid: Some(20),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --pool worker".to_string(),
+        lineage_path: vec!["app.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_a1, p_a2],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_b1],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res = EvidenceComparator::new(&norm_a, &norm_b).reconcile();
+    let matched: Vec<_> = res.reconciled_processes.iter().filter(|p| p.observation_presence == ObservationPresence::OBSERVED_IN_BOTH).collect();
+    assert_eq!(matched.len(), 1);
+    assert_eq!(matched[0].confidence, ProcessMatchConfidence::POSSIBLE_MATCH);
+}

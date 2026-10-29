@@ -26,12 +26,12 @@ from typing import Any, Dict, List
 from .parsers.cape_parser import parse_cape_report
 from .parsers.falcon_parser import parse_falcon_report
 from .provenance import resolve_json_pointer
-from .reconciler import EvidenceComparator
 
 
 class ExecutionBenchmark:
     @staticmethod
     def run_benchmark(iterations: int = 100, warmup_runs: int = 10) -> Dict[str, Any]:
+        from .reconciler import EvidenceComparator
         base_dir = Path(__file__).resolve().parent.parent
         path_a = base_dir / "data/report_format_a_cape.json"
         path_b = base_dir / "data/report_format_b_falcon.json"
