@@ -897,6 +897,8 @@ impl<'a> EvidenceComparator<'a> {
                 let (score, has_disc) = self.score_network_pair(list_a[0], list_b[0]);
                 if has_disc && score > 0.0 {
                     pairs.push((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH".to_string(), true));
+                } else if has_disc {
+                    pairs.push((list_a[0], list_b[0], "DIVERGENT_ENDPOINT_ATTRIBUTES".to_string(), false));
                 } else {
                     pairs.push((list_a[0], list_b[0], "SINGLETON_ENDPOINT_OVERLAP".to_string(), false));
                 }
@@ -948,6 +950,11 @@ impl<'a> EvidenceComparator<'a> {
                         "Socket observation '{}' corroborated across both reports with matching connection attributes (source port, PID, or timestamp). Telemetry confirms both environments logged matching socket activity; does not establish full application-layer handshake completion or identical payload transmission without packet-level capture.",
                         key
                     )
+                } else if cross_corr == "DIVERGENT_ENDPOINT_ATTRIBUTES" {
+                    format!(
+                        "Endpoint '{}' logged once in each report, but distinguishing attributes conflict (e.g., source port or protocol). Treated as endpoint-level overlap with conflicting attributes rather than a corroborated socket stream.",
+                        key
+                    )
                 } else {
                     format!(
                         "Endpoint '{}' logged once in each report, but records lack distinguishing attributes (e.g., ephemeral source port, PID, or timestamp) to confirm an identical socket session. Treat as endpoint overlap rather than a verified stream-level match.",
@@ -957,6 +964,8 @@ impl<'a> EvidenceComparator<'a> {
 
                 let (causal, causal_stat) = if cross_corr == "DIRECT_IDENTIFIER_MATCH" {
                     (CausalExplanation::CORROBORATED_EXECUTION, "CORROBORATED_SOCKET".to_string())
+                } else if cross_corr == "DIVERGENT_ENDPOINT_ATTRIBUTES" {
+                    (CausalExplanation::UNEXPLAINED, "DIVERGENT_ENDPOINT_ATTRIBUTES".to_string())
                 } else {
                     (CausalExplanation::UNEXPLAINED, "ENDPOINT_MATCH".to_string())
                 };

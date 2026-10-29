@@ -1,7 +1,7 @@
 # Evidence-Aware Sandbox Comparator
 
 [![CI](https://github.com/Namanbhatt-01/sandbox-comparator/actions/workflows/ci.yml/badge.svg)](https://github.com/Namanbhatt-01/sandbox-comparator/actions)
-[![Tests: 68 Passing](https://img.shields.io/badge/tests-68%20passing-brightgreen.svg)](tests/)
+[![Tests: 75 Passing](https://img.shields.io/badge/tests-75%20passing-brightgreen.svg)](tests/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Architecture: Offline--First](https://img.shields.io/badge/architecture-offline--first-emerald.svg)]()
@@ -48,7 +48,7 @@ sandbox-comparator compare \
 ```
 
 ### Step 5: Verify Test Suite
-Run the complete test suite (50 Python tests, 13 Rust parity tests, 5 DOM XSS tests, and offline privacy verification):
+Run the complete test suite (58 Python tests, 17 Rust parity tests, DOM XSS tests, and offline privacy verification):
 ```bash
 make test-all
 # Or: make test && make dom-test && make rust-test
@@ -68,7 +68,7 @@ Security analysts frequently submit malware to multiple sandboxes or execute rep
 1. **Behavioral Normalization**: Maps diverse vendor schemas into a common behavioral model (processes, dropped files, sockets, limitation warnings).
 2. **Anchor-Preserving Greedy Bipartite Matching**: Deterministically aligns process trees using multi-factor similarity heuristics (image name, command-line arguments, ancestry depth) with intrinsic attribute tie-breaking, preserving unambiguous anchor matches without relying on volatile PIDs.
 3. **Causal Limitation Attribution**: Contextually correlates absent telemetry with runtime boundaries (firewall blocks, execution timeouts) rather than speculating about evasive malware actions.
-4. **Source Evidence Provenance**: Every matched or missing entity links directly to an RFC 6901 JSON pointer resolving to the exact raw source line.
+4. **Source Evidence Provenance**: Every matched or missing entity links directly to an RFC 6901 JSON pointer identifying the corresponding value within the parsed source document structure.
 5. **100% Offline-First Execution**: Runs entirely on your local machine with zero external network requests or font imports.
 
 ---

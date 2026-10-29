@@ -13,11 +13,33 @@ from engine.reconciler import EvidenceComparator
 from engine.vt_benchmark import VTBenchmarkEvaluator
 
 
-def classify_cross_report_activity(matched_procs: int, matched_files: int) -> Tuple[str, str]:
+def classify_cross_report_activity(
+    matched_procs: int, matched_files: int, is_cross_sample: bool = False
+) -> Tuple[str, str]:
     """
     Classifies cross-sandbox report alignment into epistemic activity tiers.
     Separates behavioral correlation from claims of malicious compromise.
+    Distinguishes cross-sample heuristic similarity from same-sample cross-run corroboration.
     """
+    if is_cross_sample:
+        if matched_procs > 0 or matched_files > 0:
+            return (
+                "CROSS-SAMPLE BEHAVIORAL SIMILARITY",
+                (
+                    f"Heuristic behavioral alignment observed across different malware samples "
+                    f"({matched_procs} process node(s), {matched_files} file artifact(s)). "
+                    "Reports analyze different sample SHA-256 hashes; behavioral similarities "
+                    "reflect cross-sample heuristic overlap, NOT same-sample execution reproducibility."
+                ),
+            )
+        return (
+            "CROSS-SAMPLE DIVERGENCE",
+            (
+                "Input reports analyze different sample SHA-256 hashes and share no "
+                "reconciled process or dropped-file observations."
+            ),
+        )
+
     if matched_procs > 0 and matched_files > 0:
         return (
             "CROSS-RUN ACTIVITY CORROBORATED",
@@ -61,11 +83,17 @@ def format_markdown_report(comparison, vt_eval=None) -> str:
     lines.append(f"- **Report B**: `{comparison.report_b_id}` ({meta_b.get('sandbox')}) — Provenance: `{meta_b.get('provenance_type')}`\n")
 
     matched_procs = sum(1 for p in comparison.reconciled_processes if p.confidence.value == "MATCHED")
-    matched_files = sum(1 for f in comparison.reconciled_files if f.observation_presence.value == "OBSERVED_IN_BOTH")
+    crypto_matched_files = sum(
+        1 for f in comparison.reconciled_files
+        if f.observation_presence.value == "OBSERVED_IN_BOTH" and not getattr(f, "is_malformed_hash", False)
+    )
     unresolved_net = sum(1 for n in comparison.reconciled_network if n.observation_presence.value != "OBSERVED_IN_BOTH")
     total_lims = sum(len(v) for v in comparison.collection_limitations.values())
 
-    verdict, summary_text = classify_cross_report_activity(matched_procs, matched_files)
+    is_cross_sample = str(comparison.sample_sha256).startswith("CROSS_SAMPLE:")
+    verdict, summary_text = classify_cross_report_activity(
+        matched_procs, crypto_matched_files, is_cross_sample=is_cross_sample
+    )
 
     if unresolved_net > 0 and total_lims > 0:
         summary_text += (

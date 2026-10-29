@@ -89,7 +89,14 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
         )
 
     # 2. Hierarchical process tree with RFC 6901 pointers
-    def traverse_node(node: Dict[str, Any], parent_lineage: List[str], token_path: List[Union[str, int]]):
+    seen_pids: set = set()
+
+    def traverse_node(
+        node: Dict[str, Any],
+        parent_lineage: List[str],
+        token_path: List[Union[str, int]],
+        parent_pid: Optional[int] = None,
+    ):
         if not isinstance(node, dict):
             return
         raw_pid = node.get("pid")
@@ -104,8 +111,20 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
                 f"Missing or non-integer pid '{raw_pid}' in process tree; assigned surrogate identifier {pid}"
             )
 
+        if pid in seen_pids:
+            norm_report.parser_warnings.append(
+                f"Duplicate PID {pid} detected in Falcon process tree"
+            )
+        else:
+            seen_pids.add(pid)
+
         parent_raw = node.get("ppid")
         ppid = int(parent_raw) if parent_raw is not None and str(parent_raw).isdigit() else None
+        if ppid is not None and parent_pid is not None and ppid != parent_pid:
+            norm_report.parser_warnings.append(
+                f"Process PID {pid} declared ppid={ppid} but is nested under PID {parent_pid}"
+            )
+
         name = str(node.get("name") or "unknown")
         cmd = str(node.get("cmdline") or "")
         current_lineage = parent_lineage + [name]
@@ -140,11 +159,11 @@ def parse_falcon_report(raw: Optional[Dict[str, Any]], report_id: str = "report_
 
         children = node.get("children") if isinstance(node.get("children"), list) else []
         for c_idx, child in enumerate(children):
-            traverse_node(child, current_lineage, token_path + ["children", c_idx])
+            traverse_node(child, current_lineage, token_path + ["children", c_idx], parent_pid=pid)
 
     root_processes = execution.get("process_tree") if isinstance(execution.get("process_tree"), list) else []
     for r_idx, root_node in enumerate(root_processes):
-        traverse_node(root_node, [], ["execution", "process_tree", r_idx])
+        traverse_node(root_node, [], ["execution", "process_tree", r_idx], parent_pid=None)
 
     # 3. Created files
     created_files = execution.get("created_files") if isinstance(execution.get("created_files"), list) else []

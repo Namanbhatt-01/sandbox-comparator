@@ -105,13 +105,20 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     matched_procs = sum(1 for p in procs_out if p["confidence"] == "MATCHED")
     unresolved_procs = sum(1 for p in procs_out if p["confidence"] != "MATCHED")
     matched_files = sum(1 for f in files_out if f["observation_presence"] == "OBSERVED_IN_BOTH")
+    crypto_matched_files = sum(
+        1 for f in files_out
+        if f["observation_presence"] == "OBSERVED_IN_BOTH" and not f.get("is_malformed_hash", False)
+    )
     unresolved_files = sum(1 for f in files_out if f["observation_presence"] != "OBSERVED_IN_BOTH")
     matched_net = sum(1 for n in net_out if n["observation_presence"] == "OBSERVED_IN_BOTH")
     unresolved_net = sum(1 for n in net_out if n["observation_presence"] != "OBSERVED_IN_BOTH")
     total_lims_count = sum(len(v) for v in limitations_out.values())
 
     # Epistemic Analysis Summary
-    verdict, summary_text = classify_cross_report_activity(matched_procs, matched_files)
+    is_cross_sample = str(comparison.sample_sha256).startswith("CROSS_SAMPLE:")
+    verdict, summary_text = classify_cross_report_activity(
+        matched_procs, crypto_matched_files, is_cross_sample=is_cross_sample
+    )
 
     if unresolved_net > 0 and total_lims_count > 0:
         summary_text += (
@@ -126,32 +133,67 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     if matched_procs > 0:
         sample_procs = [p["image"] for p in procs_out if p["observation_presence"] == "OBSERVED_IN_BOTH"][:2]
         proc_str = ", ".join(sample_procs) if sample_procs else "active processes"
-        findings.append({
-            "title": "Corroborated Process Execution",
-            "category": "EXECUTION",
-            "severity": "HIGH",
-            "detail": f"Corroborated execution chain of {proc_str} with consistent parent-child lineage."
-        })
-    if matched_files > 0:
-        findings.append({
-            "title": "Cryptographically Verified Artifacts",
-            "category": "PERSISTENCE",
-            "severity": "CRITICAL",
-            "detail": f"{matched_files} dropped payload(s) confirmed identical across distinct filesystem paths by SHA-256."
-        })
+        if is_cross_sample:
+            findings.append({
+                "title": "Cross-Sample Process Similarity",
+                "category": "EXECUTION",
+                "severity": "MEDIUM",
+                "detail": (
+                    f"Heuristic behavioral alignment across different malware samples ({proc_str}). "
+                    f"Reflects common execution patterns or tooling, NOT same-sample execution reproducibility."
+                )
+            })
+        else:
+            findings.append({
+                "title": "Corroborated Process Execution",
+                "category": "EXECUTION",
+                "severity": "HIGH",
+                "detail": f"Corroborated execution chain of {proc_str} with consistent parent-child lineage."
+            })
+    if crypto_matched_files > 0:
+        if is_cross_sample:
+            findings.append({
+                "title": "Shared Artifact Hashes Across Samples",
+                "category": "PERSISTENCE",
+                "severity": "HIGH",
+                "detail": (
+                    f"{crypto_matched_files} dropped payload(s) share identical SHA-256 hashes across different malware samples "
+                    f"(e.g. shared utility or secondary component). Confirms identical dropped artifact without establishing same-sample identity."
+                )
+            })
+        else:
+            findings.append({
+                "title": "Cryptographically Verified Artifacts",
+                "category": "PERSISTENCE",
+                "severity": "CRITICAL",
+                "detail": f"{crypto_matched_files} dropped payload(s) confirmed identical across distinct filesystem paths by SHA-256."
+            })
     if matched_net > 0 or unresolved_net > 0:
-        findings.append({
-            "title": "Network Egress Telemetry",
-            "category": "COMMAND_AND_CONTROL",
-            "severity": "MEDIUM",
-            "detail": f"{matched_net} corroborated socket(s) recorded; {unresolved_net} uncorroborated connection(s) isolated."
-        })
+        if is_cross_sample:
+            findings.append({
+                "title": "Cross-Sample Network Telemetry",
+                "category": "COMMAND_AND_CONTROL",
+                "severity": "MEDIUM",
+                "detail": f"{matched_net} overlapping socket endpoint(s) recorded across distinct samples; {unresolved_net} sample-specific connection(s) isolated."
+            })
+        else:
+            findings.append({
+                "title": "Network Egress Telemetry",
+                "category": "COMMAND_AND_CONTROL",
+                "severity": "MEDIUM",
+                "detail": f"{matched_net} corroborated socket(s) recorded; {unresolved_net} uncorroborated connection(s) isolated."
+            })
     if total_lims_count > 0:
+        lim_detail = (
+            f"{total_lims_count} collection limitation(s) isolated (including sample-identity divergence, timeouts, or egress policies)."
+            if is_cross_sample
+            else f"{total_lims_count} environment warning(s) isolated (timeouts or egress policy enforcement)."
+        )
         findings.append({
             "title": "Recorded Collection Limitations",
             "category": "DEFENSE_EVASION",
             "severity": "INFO",
-            "detail": f"{total_lims_count} environment warning(s) isolated (timeouts or egress policy enforcement)."
+            "detail": lim_detail
         })
 
     # MITRE ATT&CK Tactics Alignment

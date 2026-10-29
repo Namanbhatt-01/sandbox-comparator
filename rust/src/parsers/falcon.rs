@@ -4,6 +4,7 @@ use crate::models::{
 };
 use crate::provenance::{build_rfc6901_pointer, preview_str};
 use serde_json::Value;
+use std::collections::HashSet;
 
 fn is_valid_sha256(s: &str) -> bool {
     s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
@@ -112,11 +113,15 @@ pub fn parse_falcon_report(raw: &Value, report_id: &str) -> NormalizedReport {
     }
 
     // 2. Hierarchical Process Tree
+    let mut seen_pids: HashSet<u32> = HashSet::new();
+
     fn traverse_node(
         node: &Value,
         parent_lineage: &[String],
         token_path: &[String],
         report_id: &str,
+        parent_pid: Option<u32>,
+        seen_pids: &mut HashSet<u32>,
         norm_report: &mut NormalizedReport,
     ) {
         if let Some(obj) = node.as_object() {
@@ -138,11 +143,29 @@ pub fn parse_falcon_report(raw: &Value, report_id: &str) -> NormalizedReport {
                 }
             };
 
+            if seen_pids.contains(&pid) {
+                norm_report.parser_warnings.push(format!(
+                    "Duplicate PID {} detected in Falcon process tree",
+                    pid
+                ));
+            } else {
+                seen_pids.insert(pid);
+            }
+
             let ppid = obj.get("ppid").and_then(|v| {
                 v.as_u64()
                     .map(|n| n as u32)
                     .or_else(|| v.as_str().and_then(|s| s.parse::<u32>().ok()))
             });
+
+            if let (Some(declared_ppid), Some(p_pid)) = (ppid, parent_pid) {
+                if declared_ppid != p_pid {
+                    norm_report.parser_warnings.push(format!(
+                        "Process PID {} declared ppid={} but is nested under PID {}",
+                        pid, declared_ppid, p_pid
+                    ));
+                }
+            }
 
             let name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
             let cmd = obj.get("cmdline").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -182,7 +205,7 @@ pub fn parse_falcon_report(raw: &Value, report_id: &str) -> NormalizedReport {
                     let mut child_path = token_path.to_vec();
                     child_path.push("children".to_string());
                     child_path.push(c_idx.to_string());
-                    traverse_node(child, &current_lineage, &child_path, report_id, norm_report);
+                    traverse_node(child, &current_lineage, &child_path, report_id, Some(pid), seen_pids, norm_report);
                 }
             }
         }
@@ -196,7 +219,7 @@ pub fn parse_falcon_report(raw: &Value, report_id: &str) -> NormalizedReport {
                     "process_tree".to_string(),
                     r_idx.to_string(),
                 ];
-                traverse_node(root_node, &[], &token_path, report_id, &mut norm_report);
+                traverse_node(root_node, &[], &token_path, report_id, None, &mut seen_pids, &mut norm_report);
             }
         }
 

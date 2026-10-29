@@ -5,6 +5,9 @@ pub fn format_markdown_report(comparison: &ComparisonReport) -> String {
     let mut lines = Vec::new();
     lines.push("# Evidence-Aware Sandbox Comparison Report".to_string());
     lines.push(format!("**Target Sample SHA-256**: `{}`\n", comparison.sample_sha256));
+    if comparison.sample_sha256.starts_with("CROSS_SAMPLE:") {
+        lines.push("> [!WARNING] **Cross-Sample Comparison**: Input reports analyze different malware sample hashes. Behavioral alignments indicate heuristic overlap, not same-sample execution reproducibility.\n".to_string());
+    }
 
     let meta_a = comparison.provenance_metadata.get(&comparison.report_a_id);
     let meta_b = comparison.provenance_metadata.get(&comparison.report_b_id);
