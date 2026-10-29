@@ -175,6 +175,99 @@ class TestP0ControlledHardening(unittest.TestCase):
         self.assertIsNotNone(file_f)
         self.assertEqual(file_f["title"], "Shared Artifact Hashes Across Samples")
         self.assertIn("without establishing same-sample identity", file_f["detail"])
+        self.assertEqual(proc_f["severity"], "MEDIUM")
+        self.assertEqual(file_f["severity"], "HIGH")
+        self.assertNotIn("CROSS-RUN ACTIVITY CORROBORATED", serialized["analysis_summary"]["verdict"])
+
+    def test_malformed_or_missing_hashes_suppress_shared_artifact_finding(self):
+        """
+        Negative regression test:
+        1. When dropped files in two cross-sample reports have missing, malformed, or invalid SHA-256 hashes,
+           matching filenames or filesystem paths CANNOT produce a 'Shared Artifact Hashes Across Samples'
+           or 'Cryptographically Verified Artifacts' finding card.
+        2. Positive control: Genuinely identical valid 64-char SHA-256 hashes DO produce the finding,
+           and the card count reflects only verified hashes.
+        """
+        from web.app import serialize_comparison
+
+        hash_a = "1" * 64
+        hash_b = "2" * 64
+        valid_shared_hash = "f" * 64
+
+        # Case 1: Identical filename and path, but malformed or missing hashes
+        file_a_invalid = DroppedFileObservation(
+            report_id="rep_a",
+            sha256="not_a_valid_hex_hash",
+            file_path=r"C:\Windows\Temp\malformed.dll",
+            file_name="malformed.dll",
+            file_size=1024,
+            file_type="PE",
+            evidence=self.dummy_pointer,
+            is_malformed_hash=True
+        )
+        file_b_invalid = DroppedFileObservation(
+            report_id="rep_b",
+            sha256="",
+            file_path=r"C:\Windows\Temp\malformed.dll",
+            file_name="malformed.dll",
+            file_size=1024,
+            file_type="PE",
+            evidence=self.dummy_pointer,
+            is_malformed_hash=True
+        )
+
+        # Negative test only: only invalid hash files
+        rep_a_neg = NormalizedReport("rep_a", "CAPE", "cape", "DOC", hash_a, 60, dropped_files=[file_a_invalid])
+        rep_b_neg = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", hash_b, 60, dropped_files=[file_b_invalid])
+
+        res_neg = EvidenceComparator(rep_a_neg, rep_b_neg).reconcile()
+        serialized_neg = serialize_comparison(res_neg)
+
+        # Assert: NO shared artifact finding card produced
+        persistence_cards_neg = [
+            f for f in serialized_neg["investigation_findings"]
+            if f["category"] == "PERSISTENCE"
+        ]
+        self.assertEqual(len(persistence_cards_neg), 0, "Malformed/missing hashes must NOT produce a shared artifact card")
+        self.assertNotIn("Shared Artifact Hashes Across Samples", [f["title"] for f in serialized_neg["investigation_findings"]])
+        self.assertNotIn("Cryptographically Verified Artifacts", [f["title"] for f in serialized_neg["investigation_findings"]])
+
+        # Positive control: add one verified shared file
+        file_a_valid = DroppedFileObservation(
+            report_id="rep_a",
+            sha256=valid_shared_hash,
+            file_path=r"C:\ProgramData\legit.dll",
+            file_name="legit.dll",
+            file_size=2048,
+            file_type="PE",
+            evidence=self.dummy_pointer
+        )
+        file_b_valid = DroppedFileObservation(
+            report_id="rep_b",
+            sha256=valid_shared_hash,
+            file_path=r"C:\Different\Path\other_name.dll",
+            file_name="other_name.dll",
+            file_size=2048,
+            file_type="PE",
+            evidence=self.dummy_pointer
+        )
+
+        rep_a_pos = NormalizedReport("rep_a", "CAPE", "cape", "DOC", hash_a, 60, dropped_files=[file_a_invalid, file_a_valid])
+        rep_b_pos = NormalizedReport("rep_b", "Falcon", "falcon", "DOC", hash_b, 60, dropped_files=[file_b_invalid, file_b_valid])
+
+        res_pos = EvidenceComparator(rep_a_pos, rep_b_pos).reconcile()
+        serialized_pos = serialize_comparison(res_pos)
+
+        persistence_cards_pos = [
+            f for f in serialized_pos["investigation_findings"]
+            if f["category"] == "PERSISTENCE"
+        ]
+        self.assertEqual(len(persistence_cards_pos), 1, "Exactly one shared artifact card for the valid hash")
+        valid_card = persistence_cards_pos[0]
+        self.assertEqual(valid_card["title"], "Shared Artifact Hashes Across Samples")
+        self.assertEqual(valid_card["severity"], "HIGH")
+        # Must only count 1 dropped payload, NOT 2 (the malformed file must be excluded from hash count)
+        self.assertIn("1 dropped payload(s) share identical SHA-256 hashes", valid_card["detail"])
 
     # =========================================================================
     # P0 Risk 2: PID Reassignment & Order Shuffling

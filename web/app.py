@@ -105,6 +105,10 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     matched_procs = sum(1 for p in procs_out if p["confidence"] == "MATCHED")
     unresolved_procs = sum(1 for p in procs_out if p["confidence"] != "MATCHED")
     matched_files = sum(1 for f in files_out if f["observation_presence"] == "OBSERVED_IN_BOTH")
+    crypto_matched_files = sum(
+        1 for f in files_out
+        if f["observation_presence"] == "OBSERVED_IN_BOTH" and not f.get("is_malformed_hash", False)
+    )
     unresolved_files = sum(1 for f in files_out if f["observation_presence"] != "OBSERVED_IN_BOTH")
     matched_net = sum(1 for n in net_out if n["observation_presence"] == "OBSERVED_IN_BOTH")
     unresolved_net = sum(1 for n in net_out if n["observation_presence"] != "OBSERVED_IN_BOTH")
@@ -113,7 +117,7 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     # Epistemic Analysis Summary
     is_cross_sample = str(comparison.sample_sha256).startswith("CROSS_SAMPLE:")
     verdict, summary_text = classify_cross_report_activity(
-        matched_procs, matched_files, is_cross_sample=is_cross_sample
+        matched_procs, crypto_matched_files, is_cross_sample=is_cross_sample
     )
 
     if unresolved_net > 0 and total_lims_count > 0:
@@ -146,14 +150,14 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
                 "severity": "HIGH",
                 "detail": f"Corroborated execution chain of {proc_str} with consistent parent-child lineage."
             })
-    if matched_files > 0:
+    if crypto_matched_files > 0:
         if is_cross_sample:
             findings.append({
                 "title": "Shared Artifact Hashes Across Samples",
                 "category": "PERSISTENCE",
                 "severity": "HIGH",
                 "detail": (
-                    f"{matched_files} dropped payload(s) share identical SHA-256 hashes across different malware samples "
+                    f"{crypto_matched_files} dropped payload(s) share identical SHA-256 hashes across different malware samples "
                     f"(e.g. shared utility or secondary component). Confirms identical dropped artifact without establishing same-sample identity."
                 )
             })
@@ -162,7 +166,7 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
                 "title": "Cryptographically Verified Artifacts",
                 "category": "PERSISTENCE",
                 "severity": "CRITICAL",
-                "detail": f"{matched_files} dropped payload(s) confirmed identical across distinct filesystem paths by SHA-256."
+                "detail": f"{crypto_matched_files} dropped payload(s) confirmed identical across distinct filesystem paths by SHA-256."
             })
     if matched_net > 0 or unresolved_net > 0:
         if is_cross_sample:

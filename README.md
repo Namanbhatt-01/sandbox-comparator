@@ -1,7 +1,7 @@
 # Evidence-Aware Sandbox Comparator
 
 [![CI](https://github.com/Namanbhatt-01/sandbox-comparator/actions/workflows/ci.yml/badge.svg)](https://github.com/Namanbhatt-01/sandbox-comparator/actions)
-[![Tests: 74 Passing](https://img.shields.io/badge/tests-74%20passing-brightgreen.svg)](tests/)
+[![Tests: 75 Passing](https://img.shields.io/badge/tests-75%20passing-brightgreen.svg)](tests/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Architecture: Offline--First](https://img.shields.io/badge/architecture-offline--first-emerald.svg)]()
@@ -48,7 +48,7 @@ sandbox-comparator compare \
 ```
 
 ### Step 5: Verify Test Suite
-Run the complete test suite (57 Python tests, 17 Rust parity tests, DOM XSS tests, and offline privacy verification):
+Run the complete test suite (58 Python tests, 17 Rust parity tests, DOM XSS tests, and offline privacy verification):
 ```bash
 make test-all
 # Or: make test && make dom-test && make rust-test
