@@ -205,6 +205,15 @@ class TestFuzzingAndSecurity(unittest.TestCase):
         if not node_bin:
             self.skipTest("Node.js runtime not found on host")
 
+        # Check if jsdom package is available in the current environment
+        check_jsdom = subprocess.run(
+            [node_bin, "-e", "require('jsdom')"],
+            capture_output=True,
+            text=True
+        )
+        if check_jsdom.returncode != 0:
+            self.skipTest("jsdom module is not installed on host (run 'npm install' to run browser DOM tests)")
+
         res = subprocess.run(
             [node_bin, str(js_script)],
             capture_output=True,

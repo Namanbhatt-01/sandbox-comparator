@@ -1,11 +1,12 @@
 {
   "name": "sandbox-comparator",
   "version": "1.0.0",
-  "description": "Browser-level DOM XSS and security regression suite for Sandbox Comparator",
+  "description": "Evidence-Aware Sandbox Comparator browser DOM tests",
+  "private": true,
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  },
   "scripts": {
     "test": "node tests/test_dom_xss.js"
-  },
-  "devDependencies": {
-    "jsdom": "^29.1.1"
   }
 }

@@ -18,12 +18,19 @@ help:
 install:
 	pip install -r requirements.txt
 	pip install -e .
+	@if command -v npm >/dev/null 2>&1; then npm install --silent 2>/dev/null || true; fi
 
 test:
 	python3 -m unittest discover -s tests -p "test_*.py"
 
 dom-test:
-	node tests/test_dom_xss.js
+	@if node -e "require('jsdom')" >/dev/null 2>&1; then \
+		node tests/test_dom_xss.js; \
+	elif command -v npm >/dev/null 2>&1; then \
+		npm install --silent && node tests/test_dom_xss.js; \
+	else \
+		echo "Node.js or jsdom not found. Skipping DOM XSS tests (run 'npm install' to enable)."; \
+	fi
 
 audit-privacy:
 	python3 scripts/verify_offline_privacy.py
