@@ -680,6 +680,8 @@ class EvidenceComparator:
                 score, has_disc = self._score_network_pair(list_a[0], list_b[0])
                 if has_disc and score > 0.0:
                     pairs.append((list_a[0], list_b[0], "DIRECT_IDENTIFIER_MATCH", True))
+                elif has_disc:
+                    pairs.append((list_a[0], list_b[0], "DIVERGENT_ENDPOINT_ATTRIBUTES", False))
                 else:
                     pairs.append((list_a[0], list_b[0], "SINGLETON_ENDPOINT_OVERLAP", False))
             elif len(list_a) > 0 and len(list_b) > 0:
@@ -755,6 +757,15 @@ class EvidenceComparator:
                         f"Socket observation '{key}' corroborated across both reports with matching connection attributes. "
                         f"Telemetry confirms both environments logged socket activity; does not establish "
                         f"full application-layer handshake completion or identical payload transmission without packet-level capture."
+                    )
+                elif cross_corr == "DIVERGENT_ENDPOINT_ATTRIBUTES":
+                    obs_presence = ObservationPresence.OBSERVED_IN_BOTH
+                    causal = CausalExplanation.UNEXPLAINED
+                    causal_stat = "DIVERGENT_ENDPOINT_ATTRIBUTES"
+                    interpretation = (
+                        f"Endpoint '{key}' logged once in each report, but distinguishing attributes conflict "
+                        f"(e.g., source port or protocol). Treated as endpoint-level overlap with conflicting attributes "
+                        f"rather than a corroborated socket stream."
                     )
                 elif cross_corr == "SINGLETON_ENDPOINT_OVERLAP":
                     obs_presence = ObservationPresence.OBSERVED_IN_BOTH

@@ -39,6 +39,19 @@ class TestCliVerdict(unittest.TestCase):
         self.assertEqual(verdict, "LOW CROSS-RUN CORROBORATION")
         self.assertIn("This does not establish that the behavior did not occur", summary)
 
+    def test_cross_sample_behavioral_similarity_verdict(self):
+        """When reports analyze different samples, verdict must reflect cross-sample similarity, not cross-run corroboration."""
+        verdict, summary = classify_cross_report_activity(matched_procs=2, matched_files=1, is_cross_sample=True)
+        self.assertEqual(verdict, "CROSS-SAMPLE BEHAVIORAL SIMILARITY")
+        self.assertIn("different malware samples", summary)
+        self.assertIn("NOT same-sample execution reproducibility", summary)
+
+    def test_cross_sample_divergence_verdict(self):
+        """When different samples share no activity, verdict must reflect cross-sample divergence."""
+        verdict, summary = classify_cross_report_activity(matched_procs=0, matched_files=0, is_cross_sample=True)
+        self.assertEqual(verdict, "CROSS-SAMPLE DIVERGENCE")
+        self.assertIn("share no", summary)
+
 
 if __name__ == "__main__":
     unittest.main()

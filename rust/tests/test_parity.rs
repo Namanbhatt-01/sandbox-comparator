@@ -1030,3 +1030,417 @@ fn test_competing_sibling_ambiguity_demotes_to_possible_match_parity() {
     assert_eq!(matched.len(), 1);
     assert_eq!(matched[0].confidence, ProcessMatchConfidence::POSSIBLE_MATCH);
 }
+
+#[test]
+fn test_pid_reassignment_and_order_shuffle_stability_parity() {
+    let dummy_ptr = EvidencePointer {
+        report_id: "rep".to_string(),
+        json_pointer: "/ptr".to_string(),
+        event_summary: "sum".to_string(),
+        is_available: true,
+        missing_reason: None,
+        raw_snippet: serde_json::json!({}),
+    };
+
+    // --- Run 1: Natural order, base PIDs ---
+    let p_a1 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 1000,
+        source_ppid: None,
+        image_name: "launcher.exe".to_string(),
+        command_line: "launcher.exe --start".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_a2 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 1004,
+        source_ppid: Some(1000),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c run.bat".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 3,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_a3 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 1008,
+        source_ppid: Some(1004),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --task run".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 4,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_a4 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 1012,
+        source_ppid: Some(1004),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --task run".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 4,
+        evidence: dummy_ptr.clone(),
+    };
+
+    let p_b1 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 5000,
+        source_ppid: None,
+        image_name: "launcher.exe".to_string(),
+        command_line: "launcher.exe --start".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_b2 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 5004,
+        source_ppid: Some(5000),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c run.bat".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 3,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_b3 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 5008,
+        source_ppid: Some(5004),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --task run".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 4,
+        evidence: dummy_ptr.clone(),
+    };
+
+    let norm_a_r1 = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "hash".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_a1, p_a2, p_a3, p_a4],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b_r1 = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "hash".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_b1, p_b2, p_b3],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res_r1 = EvidenceComparator::new(&norm_a_r1, &norm_b_r1).reconcile();
+
+    // --- Run 2: Completely reassigned PIDs & shuffled order ---
+    let p_a1_r2 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 9901,
+        source_ppid: None,
+        image_name: "launcher.exe".to_string(),
+        command_line: "launcher.exe --start".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_a2_r2 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 9902,
+        source_ppid: Some(9901),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c run.bat".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 3,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_a3_r2 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 9903,
+        source_ppid: Some(9902),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --task run".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 4,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_a4_r2 = ProcessObservation {
+        report_id: "rep_a".to_string(),
+        source_pid: 9904,
+        source_ppid: Some(9902),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --task run".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 4,
+        evidence: dummy_ptr.clone(),
+    };
+
+    let p_b1_r2 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 7701,
+        source_ppid: None,
+        image_name: "launcher.exe".to_string(),
+        command_line: "launcher.exe --start".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string()],
+        tree_depth: 2,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_b2_r2 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 7702,
+        source_ppid: Some(7701),
+        image_name: "cmd.exe".to_string(),
+        command_line: "cmd.exe /c run.bat".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string()],
+        tree_depth: 3,
+        evidence: dummy_ptr.clone(),
+    };
+    let p_b3_r2 = ProcessObservation {
+        report_id: "rep_b".to_string(),
+        source_pid: 7703,
+        source_ppid: Some(7702),
+        image_name: "worker.exe".to_string(),
+        command_line: "worker.exe --task run".to_string(),
+        lineage_path: vec!["explorer.exe".to_string(), "launcher.exe".to_string(), "cmd.exe".to_string(), "worker.exe".to_string()],
+        tree_depth: 4,
+        evidence: dummy_ptr.clone(),
+    };
+
+    // Shuffled input order
+    let norm_a_r2 = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "hash".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_a3_r2, p_a1_r2, p_a4_r2, p_a2_r2],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b_r2 = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "hash".to_string(),
+        duration_seconds: Some(60),
+        processes: vec![p_b2_r2, p_b3_r2, p_b1_r2],
+        dropped_files: Vec::new(),
+        network_events: Vec::new(),
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res_r2 = EvidenceComparator::new(&norm_a_r2, &norm_b_r2).reconcile();
+
+    // Verify stability of anchors: launcher and cmd must be MATCHED in both
+    for (res, _lbl) in [(&res_r1, "Run 1"), (&res_r2, "Run 2")] {
+        let launcher = res.reconciled_processes.iter().find(|p| p.image_name == "launcher.exe" && p.observation_presence == ObservationPresence::OBSERVED_IN_BOTH).unwrap();
+        assert_eq!(launcher.confidence, ProcessMatchConfidence::MATCHED);
+
+        let cmd = res.reconciled_processes.iter().find(|p| p.image_name == "cmd.exe" && p.observation_presence == ObservationPresence::OBSERVED_IN_BOTH).unwrap();
+        assert_eq!(cmd.confidence, ProcessMatchConfidence::MATCHED);
+
+        // Ambiguous worker must remain POSSIBLE_MATCH
+        let worker_matched = res.reconciled_processes.iter().find(|p| p.image_name == "worker.exe" && p.observation_presence == ObservationPresence::OBSERVED_IN_BOTH).unwrap();
+        assert_eq!(worker_matched.confidence, ProcessMatchConfidence::POSSIBLE_MATCH);
+        assert_eq!(worker_matched.causal_explanation, CausalExplanation::UNEXPLAINED);
+    }
+}
+
+#[test]
+fn test_network_conflicting_metadata_divergent_endpoint_attributes_parity() {
+    let dummy_ptr_a = EvidencePointer::available("rep_a", "/net/0", "TCP", serde_json::json!({"sport": 50000}));
+    let dummy_ptr_b = EvidencePointer::available("rep_b", "/net/0", "TCP", serde_json::json!({"sport": 50001}));
+
+    let net_a = NetworkObservation {
+        report_id: "rep_a".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "198.51.100.25".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr_a,
+    };
+    let net_b = NetworkObservation {
+        report_id: "rep_b".to_string(),
+        protocol: "TCP".to_string(),
+        destination: "198.51.100.25".to_string(),
+        port: Some(443),
+        evidence: dummy_ptr_b,
+    };
+
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "CAPE".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "hash1".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![net_a],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "Falcon".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "hash1".to_string(),
+        duration_seconds: Some(60),
+        processes: Vec::new(),
+        dropped_files: Vec::new(),
+        network_events: vec![net_b],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res = EvidenceComparator::new(&norm_a, &norm_b).reconcile();
+    assert_eq!(res.reconciled_network.len(), 1);
+    let item = &res.reconciled_network[0];
+    assert_eq!(item.observation_presence, ObservationPresence::OBSERVED_IN_BOTH);
+    assert_eq!(item.cross_report_correlation, "DIVERGENT_ENDPOINT_ATTRIBUTES");
+    assert_eq!(item.causal_status, "DIVERGENT_ENDPOINT_ATTRIBUTES");
+    assert_eq!(item.causal_explanation, CausalExplanation::UNEXPLAINED);
+    assert!(item.epistemic_interpretation.contains("conflicting attributes"));
+}
+
+#[test]
+fn test_falcon_duplicate_pids_and_conflicting_parents_parity() {
+    use sandbox_comparator::parsers::falcon::parse_falcon_report;
+
+    let raw_falcon = serde_json::json!({
+        "submission_info": {
+            "analyzer": "Falcon Test",
+            "schema": "falcon_hybrid_synthetic_v3",
+            "sample_metadata": {"sha256": "a".repeat(64)}
+        },
+        "execution": {
+            "process_tree": [
+                {
+                    "pid": 1000,
+                    "name": "root.exe",
+                    "cmdline": "root.exe",
+                    "children": [
+                        {
+                            "pid": 2000,
+                            "ppid": 9999,
+                            "name": "child1.exe",
+                            "cmdline": "child1.exe",
+                            "children": []
+                        },
+                        {
+                            "pid": 1000,
+                            "ppid": 1000,
+                            "name": "reused.exe",
+                            "cmdline": "reused.exe",
+                            "children": []
+                        }
+                    ]
+                }
+            ]
+        }
+    });
+
+    let norm = parse_falcon_report(&raw_falcon, "falcon_test");
+    assert!(
+        norm.parser_warnings.iter().any(|w| w.contains("Duplicate PID 1000 detected in Falcon process tree")),
+        "Expected duplicate PID warning, got: {:?}", norm.parser_warnings
+    );
+    assert!(
+        norm.parser_warnings.iter().any(|w| w.contains("Process PID 2000 declared ppid=9999 but is nested under PID 1000")),
+        "Expected conflicting PPID warning, got: {:?}", norm.parser_warnings
+    );
+}
+
+#[test]
+fn test_observation_accounting_invariants_parity() {
+    let dummy_ptr = EvidencePointer::available("rep", "/ptr", "event", serde_json::json!({}));
+
+    let p_a1 = ProcessObservation { report_id: "rep_a".to_string(), source_pid: 100, source_ppid: None, image_name: "proc1.exe".to_string(), command_line: "proc1.exe".to_string(), lineage_path: vec!["proc1.exe".to_string()], tree_depth: 1, evidence: dummy_ptr.clone() };
+    let p_a2 = ProcessObservation { report_id: "rep_a".to_string(), source_pid: 200, source_ppid: Some(100), image_name: "proc2.exe".to_string(), command_line: "proc2.exe".to_string(), lineage_path: vec!["proc1.exe".to_string(), "proc2.exe".to_string()], tree_depth: 2, evidence: dummy_ptr.clone() };
+    let p_a3 = ProcessObservation { report_id: "rep_a".to_string(), source_pid: 300, source_ppid: Some(100), image_name: "proc3.exe".to_string(), command_line: "proc3.exe".to_string(), lineage_path: vec!["proc1.exe".to_string(), "proc3.exe".to_string()], tree_depth: 2, evidence: dummy_ptr.clone() };
+
+    let p_b1 = ProcessObservation { report_id: "rep_b".to_string(), source_pid: 500, source_ppid: None, image_name: "proc1.exe".to_string(), command_line: "proc1.exe".to_string(), lineage_path: vec!["proc1.exe".to_string()], tree_depth: 1, evidence: dummy_ptr.clone() };
+    let p_b2 = ProcessObservation { report_id: "rep_b".to_string(), source_pid: 600, source_ppid: Some(500), image_name: "proc4.exe".to_string(), command_line: "proc4.exe".to_string(), lineage_path: vec!["proc1.exe".to_string(), "proc4.exe".to_string()], tree_depth: 2, evidence: dummy_ptr.clone() };
+
+    let f_a1 = DroppedFileObservation { report_id: "rep_a".to_string(), sha256: "1".repeat(64), file_path: "C:\\f1.dll".to_string(), file_name: "f1.dll".to_string(), file_size: 100, file_type: "PE".to_string(), evidence: dummy_ptr.clone(), is_malformed_hash: false };
+    let f_a2 = DroppedFileObservation { report_id: "rep_a".to_string(), sha256: "2".repeat(64), file_path: "C:\\f2.dll".to_string(), file_name: "f2.dll".to_string(), file_size: 200, file_type: "PE".to_string(), evidence: dummy_ptr.clone(), is_malformed_hash: false };
+    let f_b1 = DroppedFileObservation { report_id: "rep_b".to_string(), sha256: "1".repeat(64), file_path: "C:\\f1.dll".to_string(), file_name: "f1.dll".to_string(), file_size: 100, file_type: "PE".to_string(), evidence: dummy_ptr.clone(), is_malformed_hash: false };
+
+    let n_a1 = NetworkObservation { report_id: "rep_a".to_string(), protocol: "TCP".to_string(), destination: "1.1.1.1".to_string(), port: Some(80), evidence: dummy_ptr.clone() };
+    let n_a2 = NetworkObservation { report_id: "rep_a".to_string(), protocol: "TCP".to_string(), destination: "2.2.2.2".to_string(), port: Some(443), evidence: dummy_ptr.clone() };
+    let n_b1 = NetworkObservation { report_id: "rep_b".to_string(), protocol: "TCP".to_string(), destination: "1.1.1.1".to_string(), port: Some(80), evidence: dummy_ptr.clone() };
+
+    let norm_a = NormalizedReport {
+        report_id: "rep_a".to_string(),
+        sandbox_name: "A".to_string(),
+        schema_format: "cape".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".repeat(64),
+        duration_seconds: Some(60),
+        processes: vec![p_a1, p_a2, p_a3],
+        dropped_files: vec![f_a1, f_a2],
+        network_events: vec![n_a1, n_a2],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+    let norm_b = NormalizedReport {
+        report_id: "rep_b".to_string(),
+        sandbox_name: "B".to_string(),
+        schema_format: "falcon".to_string(),
+        schema_provenance_type: "DOC".to_string(),
+        sample_sha256: "h".repeat(64),
+        duration_seconds: Some(60),
+        processes: vec![p_b1, p_b2],
+        dropped_files: vec![f_b1],
+        network_events: vec![n_b1],
+        limitations: Vec::new(),
+        parser_warnings: Vec::new(),
+        unsupported_fields: Vec::new(),
+    };
+
+    let res = EvidenceComparator::new(&norm_a, &norm_b).reconcile();
+
+    // Process accounting
+    let matched_p = res.reconciled_processes.iter().filter(|p| p.observation_presence == ObservationPresence::OBSERVED_IN_BOTH).count();
+    let only_a_p = res.reconciled_processes.iter().filter(|p| p.observation_presence == ObservationPresence::OBSERVED_ONLY_IN_A).count();
+    let only_b_p = res.reconciled_processes.iter().filter(|p| p.observation_presence == ObservationPresence::OBSERVED_ONLY_IN_B).count();
+    assert_eq!(matched_p + only_a_p, norm_a.processes.len(), "Process accounting violated for Report A");
+    assert_eq!(matched_p + only_b_p, norm_b.processes.len(), "Process accounting violated for Report B");
+
+    // File accounting
+    let matched_f = res.reconciled_files.iter().filter(|f| f.observation_presence == ObservationPresence::OBSERVED_IN_BOTH).count();
+    let only_a_f = res.reconciled_files.iter().filter(|f| f.observation_presence == ObservationPresence::OBSERVED_ONLY_IN_A).count();
+    let only_b_f = res.reconciled_files.iter().filter(|f| f.observation_presence == ObservationPresence::OBSERVED_ONLY_IN_B).count();
+    assert_eq!(matched_f + only_a_f, norm_a.dropped_files.len(), "File accounting violated for Report A");
+    assert_eq!(matched_f + only_b_f, norm_b.dropped_files.len(), "File accounting violated for Report B");
+
+    // Network accounting
+    let matched_n = res.reconciled_network.iter().filter(|n| n.observation_presence == ObservationPresence::OBSERVED_IN_BOTH).count();
+    let only_a_n = res.reconciled_network.iter().filter(|n| n.observation_presence == ObservationPresence::OBSERVED_ONLY_IN_A).count();
+    let only_b_n = res.reconciled_network.iter().filter(|n| n.observation_presence == ObservationPresence::OBSERVED_ONLY_IN_B).count();
+    assert_eq!(matched_n + only_a_n, norm_a.network_events.len(), "Network accounting violated for Report A");
+    assert_eq!(matched_n + only_b_n, norm_b.network_events.len(), "Network accounting violated for Report B");
+}

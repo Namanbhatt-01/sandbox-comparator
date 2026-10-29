@@ -111,7 +111,10 @@ def serialize_comparison(comparison) -> Dict[str, Any]:
     total_lims_count = sum(len(v) for v in limitations_out.values())
 
     # Epistemic Analysis Summary
-    verdict, summary_text = classify_cross_report_activity(matched_procs, matched_files)
+    is_cross_sample = str(comparison.sample_sha256).startswith("CROSS_SAMPLE:")
+    verdict, summary_text = classify_cross_report_activity(
+        matched_procs, matched_files, is_cross_sample=is_cross_sample
+    )
 
     if unresolved_net > 0 and total_lims_count > 0:
         summary_text += (
